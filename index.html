@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>RUN THE NIGHT</title>
+<style>
+  :root{
+    --sky-top:#2a1f5e;
+    --sky-bot:#ff7f5c;
+    --panel:#1b1430;
+    --ink:#fdf6e8;
+    --accent:#ffd23f;
+    --accent2:#3fe0d0;
+    --danger:#ff4d6d;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    height:100%;
+    background:#0d0a1a;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    color:var(--ink);
+    overscroll-behavior:none;
+  }
+  .rig{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    width:100%;
+    max-width:720px;
+    padding:0 10px;
+  }
+  .title{
+    font-size:24px;
+    letter-spacing:6px;
+    font-weight:900;
+    color:var(--accent);
+    text-shadow: 0 0 14px rgba(255,210,63,0.5);
+  }
+  .stage{
+    position:relative;
+    border:3px solid #3a2d63;
+    border-radius:10px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px #000;
+    overflow:hidden;
+    width:100%;
+    max-width:720px;
+    touch-action:none;
+  }
+  canvas{ display:block; width:100%; height:auto; }
+  .hud{
+    position:absolute;
+    top:10px; left:14px; right:14px;
+    display:flex;
+    justify-content:space-between;
+    font-size:15px;
+    font-weight:bold;
+    color:var(--ink);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    pointer-events:none;
+  }
+  .hud .coins{ color:var(--accent); }
+  .hud .course{ color:var(--accent2); }
+  .hud .lives{ color:var(--danger); }
+  .mute-btn{
+    pointer-events:auto;
+    background:rgba(0,0,0,0.35);
+    border:1px solid rgba(255,255,255,0.25);
+    color:var(--ink);
+    font-size:14px;
+    line-height:1;
+    padding:5px 8px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .mute-btn:hover{ background:rgba(0,0,0,0.5); }
+  @media (max-width:480px){
+    .title{ font-size:18px; letter-spacing:3px; }
+  }
+  .touch-jump-btn{
+    display:none;
+    margin-top:4px;
+    width:88px; height:88px;
+    border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #4fe8da, #1fb3a3 70%);
+    border:2px solid #0f7a6f;
+    box-shadow: 0 4px 0 #0f5a52, 0 8px 20px rgba(0,0,0,0.5);
+    color:#062521;
+    font-weight:900;
+    font-size:13px;
+    letter-spacing:1px;
+    align-items:center;
+    justify-content:center;
+    -webkit-tap-highlight-color: transparent;
+    user-select:none;
+  }
+  .touch-controls .touch-jump-btn{ display:flex; }
+  .touch-pause-btn{
+    pointer-events:auto;
+    background:rgba(0,0,0,0.35);
+    border:1px solid rgba(255,255,255,0.25);
+    color:var(--ink);
+    font-size:14px;
+    line-height:1;
+    padding:5px 8px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .touch-pause-btn:hover{ background:rgba(0,0,0,0.5); }
+  .overlay{
+    position:absolute; inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    background:rgba(10,6,24,0.82);
+    text-align:center;
+    padding:20px;
+  }
+  .overlay.hide{ display:none; }
+  .overlay h2{
+    font-size:22px;
+    letter-spacing:3px;
+    color:var(--accent);
+    text-shadow:0 0 14px rgba(255,210,63,0.5);
+  }
+  .overlay p{ font-size:13px; color:#c9c0e6; max-width:280px; line-height:1.6;}
+  .btn{
+    background: linear-gradient(180deg, var(--accent2), #1fb3a3);
+    border:none;
+    color:#062521;
+    font-weight:900;
+    letter-spacing:2px;
+    font-size:13px;
+    padding:12px 22px;
+    border-radius:999px;
+    cursor:pointer;
+    box-shadow: 0 4px 0 #0f7a6f;
+  }
+  .btn:active{ transform:translateY(3px); box-shadow:0 1px 0 #0f7a6f; }
+  .keys{
+    margin-top:4px;
+    font-size:12px;
+    color:#8f86b8;
+    letter-spacing:1px;
+  }
+  .keys b{ color:var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="rig">
+  <div class="title">RUN THE <span style="color:var(--accent2)">NIGHT</span></div>
+  <div class="stage">
+    <canvas id="game" width="720" height="360"></canvas>
+    <div class="hud">
+      <div class="course">🚩 COURSE <span id="courseCount">1</span></div>
+      <div class="coins">🪙 <span id="coinCount">0</span></div>
+      <div class="lives">❤ <span id="lifeCount">3</span></div>
+      <button class="touch-pause-btn" id="pauseBtn">⏸</button>
+      <button class="mute-btn" id="muteBtn">🔊</button>
+    </div>
+    <div class="overlay" id="startOverlay">
+      <h2>RUN THE NIGHT</h2>
+      <p>キャラクターは自動で前進します。コインを集めながらタイミングよくジャンプしてゴールへ。ゴールするたびに敵や穴の配置が変わる新しいコースに突入します。</p>
+      <button class="btn" id="startBtn">START ▶</button>
+      <div class="keys" id="keysHint">SPACE か ↑ <b>ジャンプ(2段ジャンプ可)</b> ／ ESC <b>一時中断</b></div>
+    </div>
+    <div class="overlay hide" id="endOverlay">
+      <h2 id="endTitle">CLEAR!</h2>
+      <p id="endSub"></p>
+      <p id="endJoke" style="color:var(--accent); font-size:12px; margin-top:-6px;"></p>
+      <button class="btn" id="retryBtn">RETRY ▶</button>
+    </div>
+  </div>
+  <button class="touch-jump-btn" id="touchJumpBtn">JUMP</button>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H - 40;
+  const GRAVITY = 0.6;
+  const JUMP_V = -11.5;
+  const AUTO_SPEED = 3.2;
+
+  const coinCountEl = document.getElementById('coinCount');
+  const lifeCountEl = document.getElementById('lifeCount');
+  const courseCountEl = document.getElementById('courseCount');
+  const muteBtn = document.getElementById('muteBtn');
+  const touchJumpBtn = document.getElementById('touchJumpBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const keysHint = document.getElementById('keysHint');
+  const stageEl = document.querySelector('.rig');
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  const endTitle = document.getElementById('endTitle');
+  const endSub = document.getElementById('endSub');
+  const endJoke = document.getElementById('endJoke');
+  const startBtn = document.getElementById('startBtn');
+  const retryBtn = document.getElementById('retryBtn');
+
+  // ---- coin types: yellow(1) most common, blue(5) less common, red(10) rarest ----
+  const COIN_TYPES = [
+    {value:1,  color:'#ffd23f', ring:'#a8791e', weight:70},
+    {value:5,  color:'#3fa9f5', ring:'#1c5f8f', weight:22},
+    {value:10, color:'#ff4d6d', ring:'#8f1f34', weight:8},
+  ];
+
+  function pickCoinType() {
+    const total = COIN_TYPES.reduce((s, t) => s + t.weight, 0);
+    let r = Math.random() * total;
+    for (const t of COIN_TYPES) {
+      if (r < t.weight) return t;
+      r -= t.weight;
+    }
+    return COIN_TYPES[0];
+  }
+
+  function makeCoin(x, y) {
+    const t = pickCoinType();
+    return {x, y, value:t.value, color:t.color, ring:t.ring};
+  }
+
+  // ---- procedural level layout (world coordinates) ----
+  function buildLevel(course) {
+    const width = 2200 + Math.min(course - 1, 6) * 120;
+    const goalX = width - 70;
+    const platforms = [];
+    const pits = [];
+    const coins = [];
+    const enemies = [];
+
+    // safe starting platform
+    platforms.push({x:0, y:GROUND_Y, w:300, h:40});
+    let cursor = 300;
+    // stop procedural generation with enough room left for a clean, empty
+    // run-up to the goal — nothing spawns at or past the flag.
+    const finalRunwayMin = 300;
+    const genLimit = goalX - finalRunwayMin;
+
+    while (cursor < genLimit) {
+      // pit width capped so it stays clearable with a single/double jump
+      const pitW = Math.min(60 + Math.floor(Math.random() * 55), Math.max(0, genLimit - cursor));
+      if (pitW < 20) break;
+      pits.push({x:cursor, w:pitW});
+      cursor += pitW;
+
+      let platW = 150 + Math.floor(Math.random() * 160);
+      platW = Math.min(platW, genLimit - cursor);
+      if (platW < 60) break;
+      platforms.push({x:cursor, y:GROUND_Y, w:platW, h:40});
+
+      // occasional floating platform with coins above
+      if (Math.random() < 0.55) {
+        const fw = Math.min(80 + Math.floor(Math.random() * 60), platW);
+        const fx = cursor + Math.max(0, Math.floor(Math.random() * (platW - fw)));
+        const fy = GROUND_Y - (70 + Math.floor(Math.random() * 90));
+        platforms.push({x:fx, y:fy, w:fw, h:20});
+        coins.push(makeCoin(fx + fw*0.3, fy - 20));
+        coins.push(makeCoin(fx + fw*0.65, fy - 20));
+      }
+
+      // occasional enemy patrolling this ground platform
+      if (Math.random() < 0.5 && platW > 130) {
+        const speed = 1.0 + Math.random() * 0.9 + Math.min(course - 1, 5) * 0.08;
+        enemies.push({
+          x: cursor + 20, y: GROUND_Y - 24, w:28, h:24,
+          range: [cursor + 10, cursor + platW - 38],
+          dir: 1, speed
+        });
+      }
+
+      // scattered ground-level coins
+      if (Math.random() < 0.7) {
+        coins.push(makeCoin(cursor + platW * (0.3 + Math.random()*0.4), GROUND_Y - 40));
+      }
+
+      cursor += platW;
+    }
+
+    // final stretch: flat, empty runway straight to the goal —
+    // no pits, coins, or enemies placed here or beyond.
+    const finalW = Math.max(finalRunwayMin, width - cursor + 40);
+    platforms.push({x:cursor, y:GROUND_Y, w:finalW, h:40});
+
+    const goal = {x: goalX, y:20, w:36, h: GROUND_Y - 20};
+
+    return {width, platforms, pits, coins, enemies, goal};
+  }
+
+  let level, player, camX, coins, lives, keys, gameState, animT, course, banner, nextLifeBonus, respawnTimer;
+
+  const LIFE_BONUS_STEP = 100;
+  const RESPAWN_READY_FRAMES = 60; // ~1s "Ready..."
+  const RESPAWN_GO_FRAMES = 20;    // ~0.33s "Go!!"
+
+  function resetGame() {
+    course = 1;
+    level = buildLevel(course);
+    player = {
+      x:40, y:GROUND_Y-40, w:30, h:40,
+      vx:0, vy:0, onGround:false, facing:1, hurtTimer:0, jumpsUsed:0
+    };
+    camX = 0;
+    coins = 0;
+    lives = 3;
+    nextLifeBonus = LIFE_BONUS_STEP;
+    keys = {};
+    gameState = 'playing';
+    animT = 0;
+    banner = {text:'', timer:0};
+    respawnTimer = 0;
+    coinCountEl.textContent = coins;
+    lifeCountEl.textContent = lives;
+    courseCountEl.textContent = course;
+    endOverlay.classList.add('hide');
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function isOverPit(x, w) {
+    for (const p of level.pits) {
+      if (x + w > p.x && x < p.x + p.w) return true;
+    }
+    return false;
+  }
+
+  function update() {
+    if (gameState !== 'playing') return;
+    if (respawnTimer > 0) {
+      respawnTimer--;
+      return;
+    }
+    animT++;
+
+    // automatic forward movement — no left/right input
+    player.vx = (gameState === 'playing') ? AUTO_SPEED : 0;
+    player.facing = 1;
+
+    player.vy += GRAVITY;
+    if (player.vy > 14) player.vy = 14;
+
+    let nx = player.x + player.vx;
+    let ny = player.y + player.vy;
+
+    // ground / platform collision (simple resolve per axis)
+    player.onGround = false;
+    const feetNext = {x:nx, y:ny, w:player.w, h:player.h};
+
+    for (const plat of level.platforms) {
+      // check if within horizontal span and falling onto top
+      const withinX = nx + player.w > plat.x && nx < plat.x + plat.w;
+      const prevBottom = player.y + player.h;
+      const nextBottom = ny + player.h;
+      if (withinX && player.vy >= 0 && prevBottom <= plat.y + 6 && nextBottom >= plat.y) {
+        ny = plat.y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+        player.jumpsUsed = 0;
+      }
+    }
+
+    // fall into a pit -> lose life (skip while invincible: ground acts solid instead)
+    if (!player.onGround && ny + player.h >= GROUND_Y) {
+      if (player.hurtTimer > 0) {
+        ny = GROUND_Y - player.h;
+        player.vy = 0;
+        player.onGround = true;
+        player.jumpsUsed = 0;
+      } else if (ny + player.h >= GROUND_Y + 60) {
+        loseLife(true);
+        return;
+      }
+    }
+
+    // clamp to level width
+    nx = Math.max(0, Math.min(nx, level.width - player.w));
+
+    player.x = nx;
+    player.y = ny;
+
+    // enemies patrol + collision
+    for (const en of level.enemies) {
+      en.x += en.dir * en.speed;
+      if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
+      if (player.hurtTimer <= 0 && rectsOverlap(player, en)) {
+        loseLife(false);
+        return;
+      }
+    }
+
+    // coin pickup
+    level.coins = level.coins.filter(c => {
+      const cb = {x:c.x-10,y:c.y-10,w:20,h:20};
+      if (rectsOverlap(player, cb)) {
+        coins += c.value;
+        coinCountEl.textContent = coins;
+        playCoinSound(c.value);
+        while (coins >= nextLifeBonus) {
+          lives++;
+          lifeCountEl.textContent = lives;
+          nextLifeBonus += LIFE_BONUS_STEP;
+          playLifeUpSound();
+        }
+        return false;
+      }
+      return true;
+    });
+
+    // goal
+    if (rectsOverlap(player, level.goal)) {
+      nextCourse();
+      return;
+    }
+
+    if (player.hurtTimer > 0) player.hurtTimer--;
+    if (banner.timer > 0) banner.timer--;
+
+    // camera follow
+    camX = Math.max(0, Math.min(player.x - W/2 + player.w/2, level.width - W));
+  }
+
+  function nextCourse() {
+    playGoalSound();
+    course++;
+    level = buildLevel(course);
+    player.x = 40;
+    player.y = GROUND_Y - player.h;
+    player.vx = 0;
+    player.vy = 0;
+    player.onGround = true;
+    player.jumpsUsed = 0;
+    player.hurtTimer = 40;
+    camX = 0;
+    courseCountEl.textContent = course;
+    banner = {text:`COURSE ${course}`, timer:90};
+  }
+
+  function loseLife(fell) {
+    if (fell) {
+      playPitFallSound();
+    } else {
+      playEnemyHitSound();
+    }
+    lives--;
+    lifeCountEl.textContent = lives;
+    if (lives <= 0) {
+      loseGame(fell);
+      return;
+    }
+    // respawn near last safe point (simple: back to start of current pit region)
+    player.x = Math.max(20, player.x - 200);
+    player.y = GROUND_Y - player.h;
+    player.vx = 0; player.vy = 0;
+    player.hurtTimer = 120;
+    player.onGround = true;
+    player.jumpsUsed = 0;
+    respawnTimer = RESPAWN_READY_FRAMES + RESPAWN_GO_FRAMES;
+  }
+
+  function playEnemyHitSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.18);
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.21);
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playPitFallSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(500, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.4);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.43);
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playGoalSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [659, 784, 988, 1318]; // E5 G5 B5 E6 — bright fanfare
+      notes.forEach((freq, i) => {
+        const start = now + i * 0.09;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.14, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+        osc.connect(gain).connect(masterGain);
+        osc.start(start);
+        osc.stop(start + 0.27);
+      });
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playPauseOnSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      [660, 440].forEach((freq, i) => {
+        const start = now + i * 0.07;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.1, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.1);
+        osc.connect(gain).connect(masterGain);
+        osc.start(start);
+        osc.stop(start + 0.11);
+      });
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playPauseOffSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      [440, 660].forEach((freq, i) => {
+        const start = now + i * 0.07;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.1, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.1);
+        osc.connect(gain).connect(masterGain);
+        osc.start(start);
+        osc.stop(start + 0.11);
+      });
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playCoinSound(value) {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      // higher-value coins ring a bit brighter/higher
+      const base = value >= 10 ? 1100 : (value >= 5 ? 900 : 740);
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(base, now);
+      osc.frequency.exponentialRampToValueAtTime(base * 1.5, now + 0.06);
+      gain.gain.setValueAtTime(0.11, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.13);
+
+      // higher-value coins get a quick second chime for extra sparkle
+      if (value >= 5) {
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(base * 1.5, now + 0.05);
+        gain2.gain.setValueAtTime(0.09, now + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc2.connect(gain2).connect(masterGain);
+        osc2.start(now + 0.05);
+        osc2.stop(now + 0.19);
+      }
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playLifeUpSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [523, 659, 784, 1046]; // ascending: C5 E5 G5 C6
+      notes.forEach((freq, i) => {
+        const start = now + i * 0.08;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.13, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+        osc.connect(gain).connect(masterGain);
+        osc.start(start);
+        osc.stop(start + 0.22);
+      });
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function playGameOverSound() {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [392, 330, 262, 196]; // descending: G4 E4 C4 G3
+      notes.forEach((freq, i) => {
+        const start = now + i * 0.14;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.12, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+        osc.connect(gain).connect(masterGain);
+        osc.start(start);
+        osc.stop(start + 0.32);
+      });
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  const GAMEOVER_JOKES = [
+    'まぁ、そんな時もあるさ！',
+    '穴は生きている…気をつけよう。',
+    '敵さんも今日は絶好調だったようで。',
+    'ジャンプは芸術。次はもっと美しく決めよう。',
+    '月が満ちるまで、もう一回いこうか。',
+  ];
+
+  function loseGame() {
+    gameState = 'lost';
+    endTitle.textContent = 'GAME OVER';
+    endSub.textContent = `コース ${course} ・ コイン ${coins} 枚集めたところで力尽きました…`;
+    endJoke.textContent = GAMEOVER_JOKES[Math.floor(Math.random() * GAMEOVER_JOKES.length)];
+    endOverlay.classList.remove('hide');
+    stopBGM();
+    playGameOverSound();
+  }
+
+  // ---- drawing ----
+  function drawBackground() {
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0, '#2a1f5e');
+    grad.addColorStop(1, '#ff7f5c');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,W,H);
+
+    // parallax hills
+    ctx.fillStyle = 'rgba(20,14,46,0.5)';
+    for (let i = -1; i < 6; i++) {
+      const bx = i * 260 - (camX * 0.3) % 260;
+      ctx.beginPath();
+      ctx.ellipse(bx, GROUND_Y + 40, 180, 90, 0, Math.PI, 0);
+      ctx.fill();
+    }
+    // moon — phase cycles from crescent to full and back as courses progress
+    drawMoon(W - 90, 70, 34, moonPhaseForCourse(course));
+  }
+
+  // maps course number to a moon "fullness" 0..1 (0=thin crescent, 1=full),
+  // oscillating smoothly: crescent -> full -> crescent -> full ...
+  const MOON_CYCLE_COURSES = 5;
+  const MOON_MIN_FULLNESS = 0.12;
+  function moonPhaseForCourse(c) {
+    const t = (c - 1) / MOON_CYCLE_COURSES;
+    const wave = (1 - Math.cos(Math.PI * t)) / 2; // 0 -> 1 -> 0 -> 1 ...
+    return MOON_MIN_FULLNESS + (1 - MOON_MIN_FULLNESS) * wave;
+  }
+
+  function drawMoon(cx, cy, r, fullness) {
+    const litColor = 'rgba(245,240,225,0.95)';
+    const darkColor = 'rgba(45,38,90,0.55)';
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+
+    // dim base disk
+    ctx.fillStyle = darkColor;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    if (fullness >= 0.999) {
+      ctx.fillStyle = litColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (fullness > 0) {
+      // right hemisphere is always the lit base
+      ctx.fillStyle = litColor;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // terminator ellipse: shrinks the crescent or fattens it into a gibbous
+      const rx = r * Math.abs(1 - 2 * fullness);
+      ctx.fillStyle = fullness < 0.5 ? darkColor : litColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, r, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawWorld() {
+    ctx.save();
+    ctx.translate(-camX, 0);
+
+    // platforms
+    for (const p of level.platforms) {
+      ctx.fillStyle = '#3a2d63';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#5c46a8';
+      ctx.fillRect(p.x, p.y, p.w, 8);
+    }
+
+    // pit visual (just show dark gap, background already implies emptiness)
+    for (const pit of level.pits) {
+      ctx.fillStyle = '#0d0a1a';
+      ctx.fillRect(pit.x, GROUND_Y, pit.w, H - GROUND_Y);
+    }
+
+    // coins
+    const bob = Math.sin(animT * 0.12) * 3;
+    for (const c of level.coins) {
+      const radius = c.value >= 10 ? 11 : (c.value >= 5 ? 10 : 9);
+      ctx.fillStyle = c.color;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y + bob, radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = c.ring;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // enemies
+    for (const en of level.enemies) {
+      ctx.fillStyle = '#ff4d6d';
+      ctx.beginPath();
+      ctx.ellipse(en.x + en.w/2, en.y + en.h/2, en.w/2, en.h/2, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      const eyeDx = en.dir * 4;
+      ctx.beginPath();
+      ctx.arc(en.x + en.w/2 + eyeDx, en.y + en.h/2 - 3, 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // goal flag
+    ctx.fillStyle = '#8f86b8';
+    ctx.fillRect(level.goal.x + level.goal.w/2 - 2, level.goal.y, 4, level.goal.h);
+    ctx.fillStyle = '#3fe0d0';
+    ctx.beginPath();
+    ctx.moveTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 6);
+    ctx.lineTo(level.goal.x + level.goal.w/2 + 32, level.goal.y + 16);
+    ctx.lineTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 26);
+    ctx.closePath();
+    ctx.fill();
+
+    // player
+    const hurt = player.hurtTimer > 0 && Math.floor(animT/4)%2===0;
+    ctx.fillStyle = hurt ? '#ff9fae' : '#ffd23f';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    // simple face direction indicator
+    ctx.fillStyle = '#1b1430';
+    const eyeX = player.facing > 0 ? player.x + player.w - 9 : player.x + 5;
+    ctx.fillRect(eyeX, player.y + 8, 4, 4);
+
+    ctx.restore();
+  }
+
+  function drawBanner() {
+    if (banner.timer <= 0) return;
+    const t = banner.timer;
+    const alpha = t > 20 ? 1 : t / 20;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center';
+    ctx.font = '900 30px Trebuchet MS, sans-serif';
+    ctx.fillStyle = 'rgba(10,6,24,0.55)';
+    ctx.fillRect(W/2 - 140, H/2 - 60, 280, 54);
+    ctx.fillStyle = '#ffd23f';
+    ctx.shadowColor = 'rgba(255,210,63,0.8)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(banner.text, W/2, H/2 - 22);
+    ctx.restore();
+  }
+
+  function drawPausedOverlay() {
+    if (gameState !== 'paused') return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,6,24,0.6)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#3fe0d0';
+    ctx.shadowColor = 'rgba(63,224,208,0.7)';
+    ctx.shadowBlur = 16;
+    ctx.font = '900 32px Trebuchet MS, sans-serif';
+    ctx.fillText('PAUSED', W/2, H/2 - 6);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#c9c0e6';
+    ctx.font = '13px Trebuchet MS, sans-serif';
+    if (navigator.userAgent.includes('Mobile') ) {
+      ctx.fillText('画面タップで再開', W/2, H/2 + 22);
+    } else {
+      ctx.fillText('ESC で再開', W/2, H/2 + 22);
+    }
+    ctx.restore();
+  }
+
+  function drawRespawnMessage() {
+    if (respawnTimer <= 0) return;
+    const isReady = respawnTimer > RESPAWN_GO_FRAMES;
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,6,24,0.4)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    if (isReady) {
+      ctx.fillStyle = '#ff4d6d';
+      ctx.shadowColor = 'rgba(255,77,109,0.8)';
+      ctx.shadowBlur = 16;
+      ctx.font = '900 30px Trebuchet MS, sans-serif';
+      ctx.fillText('Ready...', W/2, H/2);
+    } else {
+      const t = respawnTimer / RESPAWN_GO_FRAMES; // 1 -> 0
+      const scale = 1 + (1 - t) * 0.4;
+      ctx.translate(W/2, H/2);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#3fe0d0';
+      ctx.shadowColor = 'rgba(63,224,208,0.9)';
+      ctx.shadowBlur = 20;
+      ctx.font = '900 36px Trebuchet MS, sans-serif';
+      ctx.fillText('Go!!', 0, 0);
+    }
+    ctx.restore();
+  }
+
+  function loop() {
+    update();
+    drawBackground();
+    drawWorld();
+    drawBanner();
+    drawPausedOverlay();
+    drawRespawnMessage();
+    requestAnimationFrame(loop);
+  }
+
+  function tryJump() {
+    if (gameState !== 'playing' || respawnTimer > 0) return;
+    if (player.onGround) {
+      player.vy = JUMP_V;
+      player.onGround = false;
+      player.jumpsUsed = 1;
+      playJumpSound(520);
+    } else if (player.jumpsUsed < 2) {
+      player.vy = JUMP_V * 0.92;
+      player.jumpsUsed = 2;
+      playJumpSound(760);
+    }
+  }
+
+  let audioCtx = null;
+  let masterGain = null;
+  let muted = false;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = muted ? 0 : 1;
+      masterGain.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playJumpSound(freq) {
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.6, now + 0.08);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  // ---- simple procedural chiptune BGM loop ----
+  const BGM_BPM = 132;
+  const MELODY = [523,0,659,0,784,659,523,0, 587,0,698,0,880,698,587,440];
+  const BASS   = [131,0,0,131, 165,0,0,165,  147,0,0,147, 196,0,0,196];
+  let bgmTimer = null;
+  let bgmStep = 0;
+
+  function playNote(freq, type, duration, volume) {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain).connect(masterGain);
+    osc.start(now);
+    osc.stop(now + duration);
+  }
+
+  function bgmStepTick() {
+    if (!audioCtx) return;
+    const m = MELODY[bgmStep % MELODY.length];
+    const b = BASS[bgmStep % BASS.length];
+    if (m) playNote(m, 'triangle', 0.16, 0.05);
+    if (b) playNote(b, 'square', 0.2, 0.05);
+    bgmStep++;
+  }
+
+  function startBGM() {
+    try {
+      ensureAudio();
+      if (bgmTimer) return;
+      bgmStep = 0;
+      const stepMs = (60 / BGM_BPM / 2) * 1000;
+      bgmTimer = setInterval(bgmStepTick, stepMs);
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function stopBGM() {
+    if (bgmTimer) {
+      clearInterval(bgmTimer);
+      bgmTimer = null;
+    }
+  }
+
+  function resumeBGM() {
+    try {
+      if (bgmTimer || !audioCtx) return;
+      const stepMs = (60 / BGM_BPM / 2) * 1000;
+      bgmTimer = setInterval(bgmStepTick, stepMs);
+    } catch (e) {
+      // audio not available — fail silently
+    }
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+    muteBtn.textContent = muted ? '🔇' : '🔊';
+  }
+
+  function togglePause() {
+    if (gameState === 'playing') {
+      gameState = 'paused';
+      stopBGM();
+      playPauseOnSound();
+    } else if (gameState === 'paused') {
+      gameState = 'playing';
+      resumeBGM();
+      playPauseOffSound();
+    }
+  }
+
+  window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+    if (!e.repeat && (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW')) {
+      tryJump();
+    }
+    if (!e.repeat && e.code === 'Escape') {
+      togglePause();
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+  startBtn.addEventListener('click', () => {
+    startOverlay.classList.add('hide');
+    resetGame();
+    startBGM();
+  });
+  retryBtn.addEventListener('click', () => {
+    resetGame();
+    startBGM();
+  });
+  muteBtn.addEventListener('click', toggleMute);
+  pauseBtn.addEventListener('click', togglePause);
+
+  // touch jump button — works alongside keyboard controls, doesn't replace them
+  touchJumpBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    tryJump();
+  }, {passive:false});
+  touchJumpBtn.addEventListener('click', () => tryJump());
+
+  // detect touch-capable devices to reveal the on-screen jump button
+  // and swap the instructions text accordingly
+  const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (isTouchDevice) {
+    stageEl.classList.add('touch-controls');
+    keysHint.innerHTML = '画面右下の <b>JUMPボタン</b> でジャンプ(2段ジャンプ可) ／ 一時停止は <b>⏸ボタン</b>';
+  }
+
+  resetGame();
+  gameState = 'idle'; // wait for start button
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
