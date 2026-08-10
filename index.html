@@ -41,6 +41,48 @@
     color:var(--accent);
     text-shadow: 0 0 14px rgba(255,210,63,0.5);
   }
+  .slot-machine{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+  }
+  .slot-label{
+    font-size:10px;
+    letter-spacing:3px;
+    color:#8f86b8;
+  }
+  .slot-reels{
+    display:flex;
+    gap:6px;
+  }
+  .slot-reel{
+    width:40px; height:40px;
+    background:#150c17;
+    border:2px solid #3a2d63;
+    border-radius:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    color:var(--ink);
+    transition: box-shadow 0.25s, border-color 0.25s;
+  }
+  .slot-reel.spinning{
+    animation: slotFlicker 0.12s infinite alternate;
+  }
+  @keyframes slotFlicker{
+    from{ transform:scale(1); }
+    to{ transform:scale(1.08); }
+  }
+  .slot-reel.win-star{
+    border-color:#ffd23f;
+    box-shadow:0 0 16px rgba(255,210,63,0.8);
+  }
+  .slot-reel.win-777{
+    border-color:#ff4d6d;
+    box-shadow:0 0 16px rgba(255,77,109,0.8);
+  }
   .stage{
     position:relative;
     border:3px solid #3a2d63;
@@ -143,6 +185,47 @@
     box-shadow: 0 4px 0 #0f7a6f;
   }
   .btn:active{ transform:translateY(3px); box-shadow:0 1px 0 #0f7a6f; }
+  .btn-secondary{
+    background:transparent;
+    border:1.5px solid #8f86b8;
+    color:#c9c0e6;
+    font-weight:700;
+    letter-spacing:2px;
+    font-size:12px;
+    padding:9px 18px;
+    border-radius:999px;
+    cursor:pointer;
+    box-shadow:none;
+  }
+  .btn-secondary:active{ transform:translateY(2px); }
+  .howto-content{
+    width:100%;
+    max-width:320px;
+    max-height:220px;
+    overflow-y:auto;
+    text-align:left;
+    padding-right:6px;
+  }
+  .howto-section{ margin-bottom:14px; }
+  .howto-heading{
+    font-size:13px;
+    font-weight:900;
+    color:var(--accent2);
+    letter-spacing:1px;
+    margin-bottom:6px;
+  }
+  .howto-line{
+    font-size:12px;
+    color:#c9c0e6;
+    line-height:1.6;
+    margin-bottom:2px;
+  }
+  .howto-line .dot{
+    display:inline-block;
+    width:9px; height:9px;
+    border-radius:50%;
+    margin-right:6px;
+  }
   .keys{
     margin-top:4px;
     font-size:12px;
@@ -156,6 +239,14 @@
 
 <div class="rig">
   <div class="title">RUN THE <span style="color:var(--accent2)">NIGHT</span></div>
+  <div class="slot-machine" id="slotMachine">
+    <div class="slot-label">LUCKY SLOT</div>
+    <div class="slot-reels">
+      <div class="slot-reel" id="slotReel0">❔</div>
+      <div class="slot-reel" id="slotReel1">❔</div>
+      <div class="slot-reel" id="slotReel2">❔</div>
+    </div>
+  </div>
   <div class="stage">
     <canvas id="game" width="720" height="360"></canvas>
     <div class="hud">
@@ -169,6 +260,7 @@
       <h2>RUN THE NIGHT</h2>
       <p>キャラクターは自動で前進します。コインを集めながらタイミングよくジャンプしてゴールへ。ゴールするたびに敵や穴の配置が変わる新しいコースに突入します。</p>
       <button class="btn" id="startBtn">START ▶</button>
+      <button class="btn btn-secondary" id="howToBtn">あそびかた</button>
       <div class="keys" id="keysHint">SPACE か ↑ <b>ジャンプ(2段ジャンプ可)</b> ／ ESC <b>一時中断</b></div>
     </div>
     <div class="overlay hide" id="endOverlay">
@@ -176,6 +268,33 @@
       <p id="endSub"></p>
       <p id="endJoke" style="color:var(--accent); font-size:12px; margin-top:-6px;"></p>
       <button class="btn" id="retryBtn">RETRY ▶</button>
+      <button class="btn btn-secondary" id="toTitleBtn">タイトルへ戻る</button>
+    </div>
+    <div class="overlay hide" id="howToOverlay">
+      <h2>あそびかた</h2>
+      <div class="howto-content">
+        <div class="howto-section">
+          <div class="howto-heading">🪙 コイン</div>
+          <div class="howto-line"><span class="dot" style="background:#ffd23f"></span>黄コイン … 1枚分（一番よく出る）</div>
+          <div class="howto-line"><span class="dot" style="background:#3fa9f5"></span>青コイン … 5枚分（やや珍しい）</div>
+          <div class="howto-line"><span class="dot" style="background:#ff4d6d"></span>赤コイン … 10枚分（レア）</div>
+          <div class="howto-line">合計100枚ごとにライフが1回復します。</div>
+        </div>
+        <div class="howto-section">
+          <div class="howto-heading">🎰 ラッキースロット</div>
+          <div class="howto-line">コインを50枚集めるごとに1回、自動で抽選されます。</div>
+          <div class="howto-line"><b>ハズレ</b> … 効果なし（一番出やすい）</div>
+          <div class="howto-line"><b>☆☆☆</b> … 8秒間 無敵状態になる</div>
+          <div class="howto-line"><b>777</b> … 8秒間 無敵状態 ＋ コイン+777枚 ＋ 次のコースが満月に（一番レア）</div>
+        </div>
+        <div class="howto-section">
+          <div class="howto-heading">✨ 無敵状態</div>
+          <div class="howto-line">敵にぶつかっても、穴に落ちてもライフが減りません。</div>
+          <div class="howto-line">復帰直後は自動的に短時間の無敵になります。</div>
+          <div class="howto-line">スロットで当たると8秒間の無敵になり、専用のBGMに切り替わります。</div>
+        </div>
+      </div>
+      <button class="btn" id="closeHowToBtn">とじる</button>
     </div>
   </div>
   <button class="touch-jump-btn" id="touchJumpBtn">JUMP</button>
@@ -189,7 +308,10 @@
   const GROUND_Y = H - 40;
   const GRAVITY = 0.6;
   const JUMP_V = -11.5;
-  const AUTO_SPEED = 3.2;
+  const BASE_AUTO_SPEED = 3.2;
+  const SPEED_UP_INTERVAL_COURSES = 7;
+  const SPEED_UP_INCREMENT = 0.35;
+  const MAX_AUTO_SPEED = 6.0;
 
   const coinCountEl = document.getElementById('coinCount');
   const lifeCountEl = document.getElementById('lifeCount');
@@ -199,15 +321,24 @@
   const pauseBtn = document.getElementById('pauseBtn');
   const keysHint = document.getElementById('keysHint');
   const stageEl = document.querySelector('.rig');
+  const slotReels = [
+    document.getElementById('slotReel0'),
+    document.getElementById('slotReel1'),
+    document.getElementById('slotReel2'),
+  ];
   const startOverlay = document.getElementById('startOverlay');
   const endOverlay = document.getElementById('endOverlay');
+  const howToOverlay = document.getElementById('howToOverlay');
   const endTitle = document.getElementById('endTitle');
   const endSub = document.getElementById('endSub');
   const endJoke = document.getElementById('endJoke');
   const startBtn = document.getElementById('startBtn');
   const retryBtn = document.getElementById('retryBtn');
+  const toTitleBtn = document.getElementById('toTitleBtn');
+  const howToBtn = document.getElementById('howToBtn');
+  const closeHowToBtn = document.getElementById('closeHowToBtn');
 
-  // ---- coin types: yellow(1) most common, blue(5) less common, red(10) rarest ----
+  // ---- コインの種類：黄(1枚)が最も多く出現、青(5枚)はやや少なめ、赤(10枚)は最もレア ----
   const COIN_TYPES = [
     {value:1,  color:'#ffd23f', ring:'#a8791e', weight:70},
     {value:5,  color:'#3fa9f5', ring:'#1c5f8f', weight:22},
@@ -229,7 +360,7 @@
     return {x, y, value:t.value, color:t.color, ring:t.ring};
   }
 
-  // ---- procedural level layout (world coordinates) ----
+  // ---- コース地形の自動生成（ワールド座標） ----
   function buildLevel(course) {
     const width = 2200 + Math.min(course - 1, 6) * 120;
     const goalX = width - 70;
@@ -238,16 +369,16 @@
     const coins = [];
     const enemies = [];
 
-    // safe starting platform
+    // 安全なスタート地点の足場
     platforms.push({x:0, y:GROUND_Y, w:300, h:40});
     let cursor = 300;
-    // stop procedural generation with enough room left for a clean, empty
-    // run-up to the goal — nothing spawns at or past the flag.
+    // ゴール手前に何もない助走区間を残すため、この位置で生成を打ち切る
+    // （旗の位置やそれ以降には何も生成しない）
     const finalRunwayMin = 300;
     const genLimit = goalX - finalRunwayMin;
 
     while (cursor < genLimit) {
-      // pit width capped so it stays clearable with a single/double jump
+      // 穴の幅は、1段・2段ジャンプで越えられる範囲に制限
       const pitW = Math.min(60 + Math.floor(Math.random() * 55), Math.max(0, genLimit - cursor));
       if (pitW < 20) break;
       pits.push({x:cursor, w:pitW});
@@ -258,7 +389,7 @@
       if (platW < 60) break;
       platforms.push({x:cursor, y:GROUND_Y, w:platW, h:40});
 
-      // occasional floating platform with coins above
+      // たまに空中に浮島とコインを配置
       if (Math.random() < 0.55) {
         const fw = Math.min(80 + Math.floor(Math.random() * 60), platW);
         const fx = cursor + Math.max(0, Math.floor(Math.random() * (platW - fw)));
@@ -268,7 +399,7 @@
         coins.push(makeCoin(fx + fw*0.65, fy - 20));
       }
 
-      // occasional enemy patrolling this ground platform
+      // たまにこの足場を敵が徘徊するようにする
       if (Math.random() < 0.5 && platW > 130) {
         const speed = 1.0 + Math.random() * 0.9 + Math.min(course - 1, 5) * 0.08;
         enemies.push({
@@ -278,7 +409,7 @@
         });
       }
 
-      // scattered ground-level coins
+      // 地面付近にコインを散らす
       if (Math.random() < 0.7) {
         coins.push(makeCoin(cursor + platW * (0.3 + Math.random()*0.4), GROUND_Y - 40));
       }
@@ -286,8 +417,8 @@
       cursor += platW;
     }
 
-    // final stretch: flat, empty runway straight to the goal —
-    // no pits, coins, or enemies placed here or beyond.
+    // 最終区間：ゴールまでまっすぐ続く、何もない平坦な足場
+    // （ここから先には穴・コイン・敵を配置しない）
     const finalW = Math.max(finalRunwayMin, width - cursor + 40);
     platforms.push({x:cursor, y:GROUND_Y, w:finalW, h:40});
 
@@ -297,10 +428,22 @@
   }
 
   let level, player, camX, coins, lives, keys, gameState, animT, course, banner, nextLifeBonus, respawnTimer;
+  let nextSlotBonus, slotBusy, slotQueueCount, nextCourseFullMoon, moonPhaseOverride, currentAutoSpeed, slotInvincibleTimer;
 
   const LIFE_BONUS_STEP = 100;
+  const SLOT_BONUS_STEP = 50;
   const RESPAWN_READY_FRAMES = 60; // ~1s "Ready..."
   const RESPAWN_GO_FRAMES = 20;    // ~0.33s "Go!!"
+  const SLOT_INVINCIBLE_FRAMES = 480; // 8s at 60fps
+
+  function grantLifeBonusIfDue() {
+    while (coins >= nextLifeBonus) {
+      lives++;
+      lifeCountEl.textContent = lives;
+      nextLifeBonus += LIFE_BONUS_STEP;
+      playLifeUpSound();
+    }
+  }
 
   function resetGame() {
     course = 1;
@@ -313,15 +456,23 @@
     coins = 0;
     lives = 3;
     nextLifeBonus = LIFE_BONUS_STEP;
+    nextSlotBonus = SLOT_BONUS_STEP;
+    currentAutoSpeed = BASE_AUTO_SPEED;
+    slotInvincibleTimer = 0;
+    slotBusy = false;
+    slotQueueCount = 0;
+    nextCourseFullMoon = false;
+    moonPhaseOverride = null;
     keys = {};
     gameState = 'playing';
     animT = 0;
-    banner = {text:'', timer:0};
+    banner = {lines:[''], timer:0};
     respawnTimer = 0;
     coinCountEl.textContent = coins;
     lifeCountEl.textContent = lives;
     courseCountEl.textContent = course;
     endOverlay.classList.add('hide');
+    resetSlotDisplay();
   }
 
   function rectsOverlap(a, b) {
@@ -344,8 +495,8 @@
     }
     animT++;
 
-    // automatic forward movement — no left/right input
-    player.vx = (gameState === 'playing') ? AUTO_SPEED : 0;
+    // 自動で前進する（左右キーによる入力はなし）
+    player.vx = (gameState === 'playing') ? currentAutoSpeed : 0;
     player.facing = 1;
 
     player.vy += GRAVITY;
@@ -354,12 +505,12 @@
     let nx = player.x + player.vx;
     let ny = player.y + player.vy;
 
-    // ground / platform collision (simple resolve per axis)
+    // 地面・足場との当たり判定（軸ごとに簡易的に解決）
     player.onGround = false;
     const feetNext = {x:nx, y:ny, w:player.w, h:player.h};
 
     for (const plat of level.platforms) {
-      // check if within horizontal span and falling onto top
+      // 横方向の範囲内かつ、上から落下して乗るタイミングかを確認
       const withinX = nx + player.w > plat.x && nx < plat.x + plat.w;
       const prevBottom = player.y + player.h;
       const nextBottom = ny + player.h;
@@ -371,7 +522,7 @@
       }
     }
 
-    // fall into a pit -> lose life (skip while invincible: ground acts solid instead)
+    // 穴に落下 → ライフを失う（無敵中は地面が実体化したように扱い、落下しない）
     if (!player.onGround && ny + player.h >= GROUND_Y) {
       if (player.hurtTimer > 0) {
         ny = GROUND_Y - player.h;
@@ -384,13 +535,13 @@
       }
     }
 
-    // clamp to level width
+    // コースの幅に収まるように制限
     nx = Math.max(0, Math.min(nx, level.width - player.w));
 
     player.x = nx;
     player.y = ny;
 
-    // enemies patrol + collision
+    // 敵の徘徊処理と当たり判定
     for (const en of level.enemies) {
       en.x += en.dir * en.speed;
       if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
@@ -400,34 +551,34 @@
       }
     }
 
-    // coin pickup
+    // コインの取得処理
     level.coins = level.coins.filter(c => {
       const cb = {x:c.x-10,y:c.y-10,w:20,h:20};
       if (rectsOverlap(player, cb)) {
         coins += c.value;
         coinCountEl.textContent = coins;
         playCoinSound(c.value);
-        while (coins >= nextLifeBonus) {
-          lives++;
-          lifeCountEl.textContent = lives;
-          nextLifeBonus += LIFE_BONUS_STEP;
-          playLifeUpSound();
+        grantLifeBonusIfDue();
+        while (coins >= nextSlotBonus) {
+          nextSlotBonus += SLOT_BONUS_STEP;
+          triggerSlotDraw();
         }
         return false;
       }
       return true;
     });
 
-    // goal
+    // ゴール判定
     if (rectsOverlap(player, level.goal)) {
       nextCourse();
       return;
     }
 
     if (player.hurtTimer > 0) player.hurtTimer--;
+    if (slotInvincibleTimer > 0) slotInvincibleTimer--;
     if (banner.timer > 0) banner.timer--;
 
-    // camera follow
+    // カメラをプレイヤーに追従させる
     camX = Math.max(0, Math.min(player.x - W/2 + player.w/2, level.width - W));
   }
 
@@ -441,10 +592,23 @@
     player.vy = 0;
     player.onGround = true;
     player.jumpsUsed = 0;
-    player.hurtTimer = 40;
+    player.hurtTimer = Math.max(player.hurtTimer, 40);
     camX = 0;
     courseCountEl.textContent = course;
-    banner = {text:`COURSE ${course}`, timer:90};
+
+    const lines = [`COURSE ${course}`];
+    if (course > 1 && (course - 1) % SPEED_UP_INTERVAL_COURSES === 0) {
+      currentAutoSpeed = Math.min(MAX_AUTO_SPEED, currentAutoSpeed + SPEED_UP_INCREMENT);
+      lines.push('Speed Up!');
+    }
+    banner = {lines, timer:100};
+
+    if (nextCourseFullMoon) {
+      moonPhaseOverride = 1;
+      nextCourseFullMoon = false;
+    } else {
+      moonPhaseOverride = null;
+    }
   }
 
   function loseLife(fell) {
@@ -459,7 +623,7 @@
       loseGame(fell);
       return;
     }
-    // respawn near last safe point (simple: back to start of current pit region)
+    // 直前の安全な位置付近に復帰させる（簡易的に、現在の穴区間の手前まで戻す）
     player.x = Math.max(20, player.x - 200);
     player.y = GROUND_Y - player.h;
     player.vx = 0; player.vy = 0;
@@ -484,7 +648,7 @@
       osc.start(now);
       osc.stop(now + 0.21);
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -503,7 +667,7 @@
       osc.start(now);
       osc.stop(now + 0.43);
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -511,7 +675,7 @@
     try {
       ensureAudio();
       const now = audioCtx.currentTime;
-      const notes = [659, 784, 988, 1318]; // E5 G5 B5 E6 — bright fanfare
+      const notes = [659, 784, 988, 1318]; // E5 G5 B5 E6 — 明るいファンファーレ
       notes.forEach((freq, i) => {
         const start = now + i * 0.09;
         const osc = audioCtx.createOscillator();
@@ -525,7 +689,7 @@
         osc.stop(start + 0.27);
       });
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -546,7 +710,7 @@
         osc.stop(start + 0.11);
       });
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -567,7 +731,182 @@
         osc.stop(start + 0.11);
       });
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  // ---- ラッキースロット：コイン50枚ごとに抽選 ----
+  // 確率順（高い→低い）：ハズレ > ☆ > 777
+  const SLOT_OUTCOMES = [
+    {key:'miss', weight:50, glow:null},
+    {key:'star', symbol:'☆', weight:35, glow:'win-star'},
+    {key:'777',  symbol:'7', weight:5,  glow:'win-777'},
+  ];
+  const SLOT_FLICKER_POOL = ['7', '☆', '💎', '🔔'];
+
+  function pickSlotOutcome() {
+    const total = SLOT_OUTCOMES.reduce((s, o) => s + o.weight, 0);
+    let r = Math.random() * total;
+    for (const o of SLOT_OUTCOMES) {
+      if (r < o.weight) return o;
+      r -= o.weight;
+    }
+    return SLOT_OUTCOMES[0];
+  }
+
+  function missSymbols() {
+    // 3つの絵柄が全て同じにならないようにする
+    const pool = SLOT_FLICKER_POOL;
+    let a, b, c;
+    do {
+      a = pool[Math.floor(Math.random() * pool.length)];
+      b = pool[Math.floor(Math.random() * pool.length)];
+      c = pool[Math.floor(Math.random() * pool.length)];
+    } while (a === b && b === c);
+    return [a, b, c];
+  }
+
+  function resetSlotDisplay() {
+    slotReels.forEach(r => {
+      r.classList.remove('spinning', 'win-star', 'win-777');
+      r.textContent = '❔';
+    });
+  }
+
+  function triggerSlotDraw() {
+    if (slotBusy) {
+      slotQueueCount++;
+      return;
+    }
+    slotBusy = true;
+    const outcome = pickSlotOutcome();
+    const symbols = outcome.key === 'miss'
+      ? missSymbols()
+      : [outcome.symbol, outcome.symbol, outcome.symbol];
+
+    slotReels.forEach(r => r.classList.add('spinning'));
+    const flickerTimers = slotReels.map(r => setInterval(() => {
+      r.textContent = SLOT_FLICKER_POOL[Math.floor(Math.random() * SLOT_FLICKER_POOL.length)];
+    }, 70));
+
+    const spinTickTimer = setInterval(playSlotSpinTick, 90);
+
+    const stopTimes = [500, 800, 1100];
+    slotReels.forEach((r, i) => {
+      setTimeout(() => {
+        clearInterval(flickerTimers[i]);
+        r.textContent = symbols[i];
+        r.classList.remove('spinning');
+      }, stopTimes[i]);
+    });
+    setTimeout(() => clearInterval(spinTickTimer), stopTimes[2]);
+
+    setTimeout(() => {
+      applySlotOutcome(outcome);
+      if (outcome.glow) {
+        slotReels.forEach(r => r.classList.add(outcome.glow));
+      }
+    }, stopTimes[2] + 80);
+
+    const resetDelay = outcome.key === 'miss' ? 900 : 2400;
+    setTimeout(() => {
+      resetSlotDisplay();
+      slotBusy = false;
+      if (slotQueueCount > 0) {
+        slotQueueCount--;
+        triggerSlotDraw();
+      }
+    }, stopTimes[2] + 80 + resetDelay);
+  }
+
+  function applySlotOutcome(outcome) {
+    if (outcome.key === 'miss') {
+      playSlotMissSound();
+    } else if (outcome.key === 'star') {
+      player.hurtTimer = Math.max(player.hurtTimer, SLOT_INVINCIBLE_FRAMES);
+      slotInvincibleTimer = SLOT_INVINCIBLE_FRAMES;
+      playSlotStarSound();
+    } else if (outcome.key === '777') {
+      player.hurtTimer = Math.max(player.hurtTimer, SLOT_INVINCIBLE_FRAMES);
+      slotInvincibleTimer = SLOT_INVINCIBLE_FRAMES;
+      nextCourseFullMoon = true;
+      coins += 777;
+      coinCountEl.textContent = coins;
+      grantLifeBonusIfDue();
+      // ボーナス分でしきい値を超えていても、抽選を連鎖させずに閾値だけ進める
+      while (coins >= nextSlotBonus) nextSlotBonus += SLOT_BONUS_STEP;
+      playSlot777Sound();
+    }
+  }
+
+  function tone(freq, type, duration, volume, startTime) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, startTime);
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(gain).connect(masterGain);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+  }
+
+  function playSlotStarSound() {
+    // スロットSEの中で最も派手な音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [523, 659, 784, 1046, 1318, 1568];
+      notes.forEach((freq, i) => {
+        const t = now + i * 0.055;
+        tone(freq, 'triangle', 0.22, 0.12, t);
+        tone(freq * 2, 'sine', 0.14, 0.05, t + 0.015);
+      });
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playSlot777Sound() {
+    // スロットSEの中で最もシンプルな音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      tone(659, 'square', 0.14, 0.12, now);
+      tone(880, 'square', 0.16, 0.1, now + 0.09);
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playSlotSpinTick() {
+    // 短い機械音、リールが回っている間繰り返し鳴らす
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      tone(300, 'square', 0.05, 0.16, now);
+    } catch (e) {
+      // 音声が使えない場合は静かに失敗させる
+    }
+  }
+
+  function playSlotMissSound() {
+    // 揃わなかった時の、しぼむような単調なブザー音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.linearRampToValueAtTime(140, now + 0.25);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -575,7 +914,7 @@
     try {
       ensureAudio();
       const now = audioCtx.currentTime;
-      // higher-value coins ring a bit brighter/higher
+      // 価値の高いコインほど、少し明るく高い音にする
       const base = value >= 10 ? 1100 : (value >= 5 ? 900 : 740);
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -588,7 +927,7 @@
       osc.start(now);
       osc.stop(now + 0.13);
 
-      // higher-value coins get a quick second chime for extra sparkle
+      // 価値の高いコインには、キラッと光る2音目を追加
       if (value >= 5) {
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
@@ -601,7 +940,7 @@
         osc2.stop(now + 0.19);
       }
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -609,7 +948,7 @@
     try {
       ensureAudio();
       const now = audioCtx.currentTime;
-      const notes = [523, 659, 784, 1046]; // ascending: C5 E5 G5 C6
+      const notes = [523, 659, 784, 1046]; // 上昇音階：C5 E5 G5 C6
       notes.forEach((freq, i) => {
         const start = now + i * 0.08;
         const osc = audioCtx.createOscillator();
@@ -623,7 +962,7 @@
         osc.stop(start + 0.22);
       });
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -631,7 +970,7 @@
     try {
       ensureAudio();
       const now = audioCtx.currentTime;
-      const notes = [392, 330, 262, 196]; // descending: G4 E4 C4 G3
+      const notes = [392, 330, 262, 196]; // 下降音階：G4 E4 C4 G3
       notes.forEach((freq, i) => {
         const start = now + i * 0.14;
         const osc = audioCtx.createOscillator();
@@ -645,7 +984,7 @@
         osc.stop(start + 0.32);
       });
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -667,7 +1006,7 @@
     playGameOverSound();
   }
 
-  // ---- drawing ----
+  // ---- 描画処理 ----
   function drawBackground() {
     const grad = ctx.createLinearGradient(0,0,0,H);
     grad.addColorStop(0, '#2a1f5e');
@@ -675,7 +1014,7 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0,0,W,H);
 
-    // parallax hills
+    // 視差（パララックス）のある丘
     ctx.fillStyle = 'rgba(20,14,46,0.5)';
     for (let i = -1; i < 6; i++) {
       const bx = i * 260 - (camX * 0.3) % 260;
@@ -683,12 +1022,12 @@
       ctx.ellipse(bx, GROUND_Y + 40, 180, 90, 0, Math.PI, 0);
       ctx.fill();
     }
-    // moon — phase cycles from crescent to full and back as courses progress
-    drawMoon(W - 90, 70, 34, moonPhaseForCourse(course));
+    // 月 — コースが進むにつれて三日月から満月へ、そしてまた三日月へと満ち欠けする
+    drawMoon(W - 90, 70, 34, moonPhaseOverride !== null ? moonPhaseOverride : moonPhaseForCourse(course));
   }
 
-  // maps course number to a moon "fullness" 0..1 (0=thin crescent, 1=full),
-  // oscillating smoothly: crescent -> full -> crescent -> full ...
+  // コース数を月の「満ち具合」0〜1に変換する（0=細い三日月、1=満月）
+  // 三日月 → 満月 → 三日月 → 満月…、と滑らかに周期変化させる
   const MOON_CYCLE_COURSES = 5;
   const MOON_MIN_FULLNESS = 0.12;
   function moonPhaseForCourse(c) {
@@ -707,7 +1046,7 @@
     ctx.closePath();
     ctx.clip();
 
-    // dim base disk
+    // 暗いベースの円盤
     ctx.fillStyle = darkColor;
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
 
@@ -717,14 +1056,14 @@
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
     } else if (fullness > 0) {
-      // right hemisphere is always the lit base
+      // 右半分は常に明るい面をベースにする
       ctx.fillStyle = litColor;
       ctx.beginPath();
       ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2);
       ctx.closePath();
       ctx.fill();
 
-      // terminator ellipse: shrinks the crescent or fattens it into a gibbous
+      // 明暗の境界となる楕円：三日月を細くしたり、満ちた形に太らせたりする
       const rx = r * Math.abs(1 - 2 * fullness);
       ctx.fillStyle = fullness < 0.5 ? darkColor : litColor;
       ctx.beginPath();
@@ -745,7 +1084,7 @@
     ctx.save();
     ctx.translate(-camX, 0);
 
-    // platforms
+    // 足場
     for (const p of level.platforms) {
       ctx.fillStyle = '#3a2d63';
       ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -753,13 +1092,13 @@
       ctx.fillRect(p.x, p.y, p.w, 8);
     }
 
-    // pit visual (just show dark gap, background already implies emptiness)
+    // 穴の見た目（暗い隙間を表示するだけで、背景側で「何もない」感を出している）
     for (const pit of level.pits) {
       ctx.fillStyle = '#0d0a1a';
       ctx.fillRect(pit.x, GROUND_Y, pit.w, H - GROUND_Y);
     }
 
-    // coins
+    // コイン
     const bob = Math.sin(animT * 0.12) * 3;
     for (const c of level.coins) {
       const radius = c.value >= 10 ? 11 : (c.value >= 5 ? 10 : 9);
@@ -772,7 +1111,7 @@
       ctx.stroke();
     }
 
-    // enemies
+    // 敵
     for (const en of level.enemies) {
       ctx.fillStyle = '#ff4d6d';
       ctx.beginPath();
@@ -785,7 +1124,7 @@
       ctx.fill();
     }
 
-    // goal flag
+    // ゴールの旗
     ctx.fillStyle = '#8f86b8';
     ctx.fillRect(level.goal.x + level.goal.w/2 - 2, level.goal.y, 4, level.goal.h);
     ctx.fillStyle = '#3fe0d0';
@@ -796,11 +1135,11 @@
     ctx.closePath();
     ctx.fill();
 
-    // player
+    // プレイヤー
     const hurt = player.hurtTimer > 0 && Math.floor(animT/4)%2===0;
     ctx.fillStyle = hurt ? '#ff9fae' : '#ffd23f';
     ctx.fillRect(player.x, player.y, player.w, player.h);
-    // simple face direction indicator
+    // 向いている方向を示す簡易的な目印
     ctx.fillStyle = '#1b1430';
     const eyeX = player.facing > 0 ? player.x + player.w - 9 : player.x + 5;
     ctx.fillRect(eyeX, player.y + 8, 4, 4);
@@ -812,16 +1151,23 @@
     if (banner.timer <= 0) return;
     const t = banner.timer;
     const alpha = t > 20 ? 1 : t / 20;
+    const lines = banner.lines || [banner.text || ''];
+    const lineHeight = 34;
+    const boxH = 40 + lines.length * lineHeight;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.textAlign = 'center';
-    ctx.font = '900 30px Trebuchet MS, sans-serif';
     ctx.fillStyle = 'rgba(10,6,24,0.55)';
-    ctx.fillRect(W/2 - 140, H/2 - 60, 280, 54);
-    ctx.fillStyle = '#ffd23f';
-    ctx.shadowColor = 'rgba(255,210,63,0.8)';
-    ctx.shadowBlur = 16;
-    ctx.fillText(banner.text, W/2, H/2 - 22);
+    ctx.fillRect(W/2 - 150, H/2 - boxH/2 - 20, 300, boxH);
+    lines.forEach((line, i) => {
+      const isSpeedUp = line === 'Speed Up!';
+      ctx.font = '900 28px Trebuchet MS, sans-serif';
+      ctx.fillStyle = isSpeedUp ? '#3fe0d0' : '#ffd23f';
+      ctx.shadowColor = isSpeedUp ? 'rgba(63,224,208,0.8)' : 'rgba(255,210,63,0.8)';
+      ctx.shadowBlur = 16;
+      const y = H/2 - 22 - (lines.length - 1) * lineHeight/2 + i * lineHeight;
+      ctx.fillText(line, W/2, y);
+    });
     ctx.restore();
   }
 
@@ -839,11 +1185,7 @@
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#c9c0e6';
     ctx.font = '13px Trebuchet MS, sans-serif';
-    if (navigator.userAgent.includes('Mobile') ) {
-      ctx.fillText('画面タップで再開', W/2, H/2 + 22);
-    } else {
-      ctx.fillText('ESC で再開', W/2, H/2 + 22);
-    }
+    ctx.fillText('ESC で再開', W/2, H/2 + 22);
     ctx.restore();
   }
 
@@ -927,14 +1269,17 @@
       osc.start(now);
       osc.stop(now + 0.15);
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
-  // ---- simple procedural chiptune BGM loop ----
+  // ---- 簡易プロシージャルBGM（チップチューン風ループ） ----
   const BGM_BPM = 132;
-  const MELODY = [523,0,659,0,784,659,523,0, 587,0,698,0,880,698,587,440];
-  const BASS   = [131,0,0,131, 165,0,0,165,  147,0,0,147, 196,0,0,196];
+  const MELODY_NORMAL = [523,0,659,0,784,659,523,0, 587,0,698,0,880,698,587,440];
+  const BASS_NORMAL   = [131,0,0,131, 165,0,0,165,  147,0,0,147, 196,0,0,196];
+  // スロットの無敵中に切り替わる、テンションの高いパターン
+  const MELODY_INVINCIBLE = [784,880,988,1046, 880,988,1046,1174, 784,880,988,1046, 880,988,1046,1318];
+  const BASS_INVINCIBLE   = [196,196,220,220, 196,196,247,247, 220,220,247,247, 196,196,220,220];
   let bgmTimer = null;
   let bgmStep = 0;
 
@@ -953,10 +1298,14 @@
 
   function bgmStepTick() {
     if (!audioCtx) return;
-    const m = MELODY[bgmStep % MELODY.length];
-    const b = BASS[bgmStep % BASS.length];
-    if (m) playNote(m, 'triangle', 0.16, 0.05);
-    if (b) playNote(b, 'square', 0.2, 0.05);
+    // スロットの無敵タイマーが動いている間は専用パターンに切り替える
+    const invincible = slotInvincibleTimer > 0;
+    const melody = invincible ? MELODY_INVINCIBLE : MELODY_NORMAL;
+    const bass = invincible ? BASS_INVINCIBLE : BASS_NORMAL;
+    const m = melody[bgmStep % melody.length];
+    const b = bass[bgmStep % bass.length];
+    if (m) playNote(m, 'triangle', 0.16, invincible ? 0.07 : 0.05);
+    if (b) playNote(b, invincible ? 'sawtooth' : 'square', 0.2, 0.05);
     bgmStep++;
   }
 
@@ -968,7 +1317,7 @@
       const stepMs = (60 / BGM_BPM / 2) * 1000;
       bgmTimer = setInterval(bgmStepTick, stepMs);
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -985,7 +1334,7 @@
       const stepMs = (60 / BGM_BPM / 2) * 1000;
       bgmTimer = setInterval(bgmStepTick, stepMs);
     } catch (e) {
-      // audio not available — fail silently
+      // 音声が使えない場合は何もせず失敗させる
     }
   }
 
@@ -1029,18 +1378,30 @@
     resetGame();
     startBGM();
   });
+  toTitleBtn.addEventListener('click', () => {
+    endOverlay.classList.add('hide');
+    resetGame();
+    gameState = 'idle';
+    startOverlay.classList.remove('hide');
+  });
+  howToBtn.addEventListener('click', () => {
+    howToOverlay.classList.remove('hide');
+  });
+  closeHowToBtn.addEventListener('click', () => {
+    howToOverlay.classList.add('hide');
+  });
   muteBtn.addEventListener('click', toggleMute);
   pauseBtn.addEventListener('click', togglePause);
 
-  // touch jump button — works alongside keyboard controls, doesn't replace them
+  // タッチ用ジャンプボタン — キーボード操作と併用でき、置き換えるものではない
   touchJumpBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
     tryJump();
   }, {passive:false});
   touchJumpBtn.addEventListener('click', () => tryJump());
 
-  // detect touch-capable devices to reveal the on-screen jump button
-  // and swap the instructions text accordingly
+  // タッチ対応デバイスを判定し、画面上のジャンプボタンを表示する
+  // あわせて操作説明の文言も切り替える
   const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   if (isTouchDevice) {
     stageEl.classList.add('touch-controls');
@@ -1048,7 +1409,7 @@
   }
 
   resetGame();
-  gameState = 'idle'; // wait for start button
+  gameState = 'idle'; // スタートボタンが押されるまで待機
   requestAnimationFrame(loop);
 })();
 </script>
