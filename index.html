@@ -79,6 +79,14 @@
     border-color:#ffd23f;
     box-shadow:0 0 16px rgba(255,210,63,0.8);
   }
+  .slot-reel.win-heart{
+    border-color:#ff6b9d;
+    box-shadow:0 0 16px rgba(255,107,157,0.8);
+  }
+  .slot-reel.win-moon{
+    border-color:#3fe0d0;
+    box-shadow:0 0 16px rgba(63,224,208,0.8);
+  }
   .slot-reel.win-777{
     border-color:#ff4d6d;
     box-shadow:0 0 16px rgba(255,77,109,0.8);
@@ -248,7 +256,7 @@
     </div>
   </div>
   <div class="stage">
-    <canvas id="game" width="720" height="360"></canvas>
+    <canvas id="game" width="720" height="460"></canvas>
     <div class="hud">
       <div class="course">🚩 COURSE <span id="courseCount">1</span></div>
       <div class="coins">🪙 <span id="coinCount">0</span></div>
@@ -285,7 +293,9 @@
           <div class="howto-line">コインを50枚集めるごとに1回、自動で抽選されます。</div>
           <div class="howto-line"><b>ハズレ</b> … 効果なし（一番出やすい）</div>
           <div class="howto-line"><b>☆☆☆</b> … 8秒間 無敵状態になる</div>
-          <div class="howto-line"><b>777</b> … 8秒間 無敵状態 ＋ コイン+777枚 ＋ 次のコースが満月に（一番レア）</div>
+          <div class="howto-line"><b>❤❤❤</b> … ライフが1回復する</div>
+          <div class="howto-line"><b>🌕🌕🌕</b> … 満月までのカウントが+2される（満月は超えない）</div>
+          <div class="howto-line"><b>777</b> … 8秒間 無敵状態 ＋ ライフ+5 ＋ 次のコースが満月に（一番レア）</div>
         </div>
         <div class="howto-section">
           <div class="howto-heading">✨ 無敵状態</div>
@@ -368,6 +378,8 @@
     const pits = [];
     const coins = [];
     const enemies = [];
+    // スピードアップが一度も発生していないうちは跳ねる敵を出さない
+    const hoppersUnlocked = course > SPEED_UP_INTERVAL_COURSES;
 
     // 安全なスタート地点の足場
     platforms.push({x:0, y:GROUND_Y, w:300, h:40});
@@ -403,9 +415,25 @@
       if (Math.random() < 0.5 && platW > 130) {
         const speed = 1.0 + Math.random() * 0.9 + Math.min(course - 1, 5) * 0.08;
         enemies.push({
+          type:'walker',
           x: cursor + 20, y: GROUND_Y - 24, w:28, h:24,
           range: [cursor + 10, cursor + platW - 38],
           dir: 1, speed
+        });
+      }
+
+      // スピードアップ後は、一定周期で跳ねる敵もたまに配置する
+      if (hoppersUnlocked && Math.random() < 0.35 && platW > 130) {
+        const hopHeight = 26 + Math.floor(Math.random() * 14);
+        const periodFrames = 70 + Math.floor(Math.random() * 40);
+        const hx = cursor + platW * (0.3 + Math.random() * 0.4) - 14;
+        enemies.push({
+          type:'hopper',
+          x: hx, y: GROUND_Y - 24, w:28, h:24,
+          baseY: GROUND_Y - 24,
+          hopHeight,
+          hopSpeed: (2 * Math.PI) / periodFrames,
+          phase: Math.random() * periodFrames,
         });
       }
 
@@ -428,7 +456,7 @@
   }
 
   let level, player, camX, coins, lives, keys, gameState, animT, course, banner, nextLifeBonus, respawnTimer;
-  let nextSlotBonus, slotBusy, slotQueueCount, nextCourseFullMoon, moonPhaseOverride, currentAutoSpeed, slotInvincibleTimer;
+  let nextSlotBonus, slotBusy, slotQueueCount, nextCourseFullMoon, currentAutoSpeed, slotInvincibleTimer, slotWinBanner, moonCount, moonDir;
 
   const LIFE_BONUS_STEP = 100;
   const SLOT_BONUS_STEP = 50;
@@ -462,11 +490,13 @@
     slotBusy = false;
     slotQueueCount = 0;
     nextCourseFullMoon = false;
-    moonPhaseOverride = null;
+    moonCount = 0;
+    moonDir = 1;
     keys = {};
     gameState = 'playing';
     animT = 0;
     banner = {lines:[''], timer:0};
+    slotWinBanner = {text:'', timer:0, color:'#ffd23f'};
     respawnTimer = 0;
     coinCountEl.textContent = coins;
     lifeCountEl.textContent = lives;
@@ -541,13 +571,30 @@
     player.x = nx;
     player.y = ny;
 
-    // 敵の徘徊処理と当たり判定
+    // 敵の移動処理
     for (const en of level.enemies) {
-      en.x += en.dir * en.speed;
-      if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
-      if (player.hurtTimer <= 0 && rectsOverlap(player, en)) {
-        loseLife(false);
-        return;
+      if (en.type === 'hopper') {
+        // 一定周期で跳ねるように上下する
+        en.y = en.baseY - Math.abs(Math.sin((animT + en.phase) * en.hopSpeed)) * en.hopHeight;
+      } else {
+        en.x += en.dir * en.speed;
+        if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
+      }
+    }
+
+    // 敵との当たり判定（無敵中は逆に倒せる）
+    if (player.hurtTimer <= 0) {
+      for (const en of level.enemies) {
+        if (rectsOverlap(player, en)) {
+          loseLife(false);
+          return;
+        }
+      }
+    } else {
+      const beforeCount = level.enemies.length;
+      level.enemies = level.enemies.filter(en => !rectsOverlap(player, en));
+      if (level.enemies.length < beforeCount) {
+        playEnemyDefeatSound();
       }
     }
 
@@ -577,6 +624,7 @@
     if (player.hurtTimer > 0) player.hurtTimer--;
     if (slotInvincibleTimer > 0) slotInvincibleTimer--;
     if (banner.timer > 0) banner.timer--;
+    if (slotWinBanner.timer > 0) slotWinBanner.timer--;
 
     // カメラをプレイヤーに追従させる
     camX = Math.max(0, Math.min(player.x - W/2 + player.w/2, level.width - W));
@@ -604,10 +652,18 @@
     banner = {lines, timer:100};
 
     if (nextCourseFullMoon) {
-      moonPhaseOverride = 1;
+      moonCount = MOON_CYCLE_COURSES;
+      moonDir = -1;
       nextCourseFullMoon = false;
     } else {
-      moonPhaseOverride = null;
+      moonCount += moonDir;
+      if (moonCount >= MOON_CYCLE_COURSES) {
+        moonCount = MOON_CYCLE_COURSES;
+        moonDir = -1;
+      } else if (moonCount <= 0) {
+        moonCount = 0;
+        moonDir = 1;
+      }
     }
   }
 
@@ -647,6 +703,26 @@
       osc.connect(gain).connect(masterGain);
       osc.start(now);
       osc.stop(now + 0.21);
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playEnemyDefeatSound() {
+    // 無敵中に敵を倒した時の「ポコッ」という可愛らしい音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(340, now);
+      osc.frequency.exponentialRampToValueAtTime(700, now + 0.07);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.13);
     } catch (e) {
       // 音声が使えない場合は何もせず失敗させる
     }
@@ -736,13 +812,15 @@
   }
 
   // ---- ラッキースロット：コイン50枚ごとに抽選 ----
-  // 確率順（高い→低い）：ハズレ > ☆ > 777
+  // 確率順（高い→低い）：ハズレ > ☆ > ❤ > 🌕 > 777
   const SLOT_OUTCOMES = [
-    {key:'miss', weight:50, glow:null},
-    {key:'star', symbol:'☆', weight:35, glow:'win-star'},
-    {key:'777',  symbol:'7', weight:5,  glow:'win-777'},
+    {key:'miss',  weight:45, glow:null},
+    {key:'star',  symbol:'☆', weight:25, glow:'win-star'},
+    {key:'heart', symbol:'❤', weight:15, glow:'win-heart'},
+    {key:'moon',  symbol:'🌕', weight:10, glow:'win-moon'},
+    {key:'777',   symbol:'7', weight:5,  glow:'win-777'},
   ];
-  const SLOT_FLICKER_POOL = ['7', '☆', '💎', '🔔'];
+  const SLOT_FLICKER_POOL = ['7', '☆', '❤', '🌕', '💎', '🔔'];
 
   function pickSlotOutcome() {
     const total = SLOT_OUTCOMES.reduce((s, o) => s + o.weight, 0);
@@ -768,7 +846,7 @@
 
   function resetSlotDisplay() {
     slotReels.forEach(r => {
-      r.classList.remove('spinning', 'win-star', 'win-777');
+      r.classList.remove('spinning', 'win-star', 'win-heart', 'win-moon', 'win-777');
       r.textContent = '❔';
     });
   }
@@ -825,16 +903,25 @@
     } else if (outcome.key === 'star') {
       player.hurtTimer = Math.max(player.hurtTimer, SLOT_INVINCIBLE_FRAMES);
       slotInvincibleTimer = SLOT_INVINCIBLE_FRAMES;
+      slotWinBanner = {text:'LUCKY!', timer:100, color:'#ffd23f'};
       playSlotStarSound();
+    } else if (outcome.key === 'heart') {
+      lives++;
+      lifeCountEl.textContent = lives;
+      slotWinBanner = {text:'LIFE +1!', timer:100, color:'#ff6b9d'};
+      playLifeUpSound();
+    } else if (outcome.key === 'moon') {
+      // 満月までのカウントを+2する（満月を超えないようクランプ）
+      moonCount = Math.min(MOON_CYCLE_COURSES, moonCount + 2);
+      slotWinBanner = {text:'MOON +2!', timer:100, color:'#3fe0d0'};
+      playSlotMoonSound();
     } else if (outcome.key === '777') {
       player.hurtTimer = Math.max(player.hurtTimer, SLOT_INVINCIBLE_FRAMES);
       slotInvincibleTimer = SLOT_INVINCIBLE_FRAMES;
       nextCourseFullMoon = true;
-      coins += 777;
-      coinCountEl.textContent = coins;
-      grantLifeBonusIfDue();
-      // ボーナス分でしきい値を超えていても、抽選を連鎖させずに閾値だけ進める
-      while (coins >= nextSlotBonus) nextSlotBonus += SLOT_BONUS_STEP;
+      lives += 5;
+      lifeCountEl.textContent = lives;
+      slotWinBanner = {text:'JACKPOT!!', timer:130, color:'#ff4d6d'};
       playSlot777Sound();
     }
   }
@@ -861,6 +948,21 @@
         const t = now + i * 0.055;
         tone(freq, 'triangle', 0.22, 0.12, t);
         tone(freq * 2, 'sine', 0.14, 0.05, t + 0.015);
+      });
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playSlotMoonSound() {
+    // 中程度の派手さ
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [440, 554, 659, 880];
+      notes.forEach((freq, i) => {
+        const t = now + i * 0.09;
+        tone(freq, 'triangle', 0.24, 0.11, t);
       });
     } catch (e) {
       // 音声が使えない場合は何もせず失敗させる
@@ -1022,17 +1124,16 @@
       ctx.ellipse(bx, GROUND_Y + 40, 180, 90, 0, Math.PI, 0);
       ctx.fill();
     }
-    // 月 — コースが進むにつれて三日月から満月へ、そしてまた三日月へと満ち欠けする
-    drawMoon(W - 90, 70, 34, moonPhaseOverride !== null ? moonPhaseOverride : moonPhaseForCourse(course));
+    // 月 — スロットの効果も加味した「満月までのカウント」をもとに満ち欠けする
+    drawMoon(W - 90, 70, 34, moonFullnessFromCount());
   }
 
-  // コース数を月の「満ち具合」0〜1に変換する（0=細い三日月、1=満月）
-  // 三日月 → 満月 → 三日月 → 満月…、と滑らかに周期変化させる
-  const MOON_CYCLE_COURSES = 5;
+  // 「満月までのカウント」を月の「満ち具合」0〜1に変換する（0=細い三日月、1=満月）
+  // moonCount は 0〜MOON_CYCLE_COURSES の間を、コース進行に合わせて行き来する
+  const MOON_CYCLE_COURSES = 7;
   const MOON_MIN_FULLNESS = 0.12;
-  function moonPhaseForCourse(c) {
-    const t = (c - 1) / MOON_CYCLE_COURSES;
-    const wave = (1 - Math.cos(Math.PI * t)) / 2; // 0 -> 1 -> 0 -> 1 ...
+  function moonFullnessFromCount() {
+    const wave = (1 - Math.cos(Math.PI * moonCount / MOON_CYCLE_COURSES)) / 2; // 0 -> 1 の滑らかな変化
     return MOON_MIN_FULLNESS + (1 - MOON_MIN_FULLNESS) * wave;
   }
 
@@ -1113,12 +1214,21 @@
 
     // 敵
     for (const en of level.enemies) {
-      ctx.fillStyle = '#ff4d6d';
+      const isHopper = en.type === 'hopper';
+      ctx.fillStyle = isHopper ? '#f9c80e' : '#ff4d6d';
       ctx.beginPath();
-      ctx.ellipse(en.x + en.w/2, en.y + en.h/2, en.w/2, en.h/2, 0, 0, Math.PI*2);
+      if (isHopper) {
+        // 跳ねの高さに応じて潰れたり伸びたりするスクワッシュ＆ストレッチ
+        const heightRatio = Math.max(0, Math.min(1, (en.baseY - en.y) / en.hopHeight));
+        const squash = 1 - heightRatio * 0.35;
+        const stretch = 1 + heightRatio * 0.35;
+        ctx.ellipse(en.x + en.w/2, en.y + en.h/2, (en.w/2) * stretch, (en.h/2) * squash, 0, 0, Math.PI*2);
+      } else {
+        ctx.ellipse(en.x + en.w/2, en.y + en.h/2, en.w/2, en.h/2, 0, 0, Math.PI*2);
+      }
       ctx.fill();
       ctx.fillStyle = '#fff';
-      const eyeDx = en.dir * 4;
+      const eyeDx = isHopper ? 0 : en.dir * 4;
       ctx.beginPath();
       ctx.arc(en.x + en.w/2 + eyeDx, en.y + en.h/2 - 3, 3, 0, Math.PI*2);
       ctx.fill();
@@ -1216,6 +1326,34 @@
     ctx.restore();
   }
 
+  function drawSlotWinEffect() {
+    if (slotWinBanner.timer <= 0) return;
+    const t = slotWinBanner.timer;
+
+    // 画面全体をパルスさせるフラッシュ
+    const pulse = 0.12 + 0.13 * Math.abs(Math.sin(t * 0.35));
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = slotWinBanner.color;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    // 画面上部に演出テキストを表示
+    const alpha = t > 25 ? 1 : t / 25;
+    const pulseScale = 1 + 0.08 * Math.abs(Math.sin(t * 0.4));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center';
+    ctx.translate(W/2, 66);
+    ctx.scale(pulseScale, pulseScale);
+    ctx.font = '900 32px Trebuchet MS, sans-serif';
+    ctx.fillStyle = slotWinBanner.color;
+    ctx.shadowColor = slotWinBanner.color;
+    ctx.shadowBlur = 22;
+    ctx.fillText(slotWinBanner.text, 0, 0);
+    ctx.restore();
+  }
+
   function loop() {
     update();
     drawBackground();
@@ -1223,6 +1361,7 @@
     drawBanner();
     drawPausedOverlay();
     drawRespawnMessage();
+    drawSlotWinEffect();
     requestAnimationFrame(loop);
   }
 
