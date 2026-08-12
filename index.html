@@ -128,9 +128,6 @@
     cursor:pointer;
   }
   .mute-btn:hover{ background:rgba(0,0,0,0.5); }
-  @media (max-width:480px){
-    .title{ font-size:18px; letter-spacing:3px; }
-  }
   .touch-jump-btn{
     display:none;
     margin-top:4px;
@@ -166,18 +163,28 @@
     display:flex;
     flex-direction:column;
     align-items:center;
-    justify-content:center;
-    gap:14px;
-    background:rgba(10,6,24,0.82);
+    justify-content:safe center;
+    gap:10px;
+    background:rgba(10,6,24,0.94);
     text-align:center;
-    padding:20px;
+    padding:18px 16px 22px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
   }
   .overlay.hide{ display:none; }
+  .hide{ display:none !important; }
+  #pauseMain, #pauseConfirm{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+  }
   .overlay h2{
     font-size:22px;
     letter-spacing:3px;
     color:var(--accent);
     text-shadow:0 0 14px rgba(255,210,63,0.5);
+    margin-top:4px;
   }
   .overlay p{ font-size:13px; color:#c9c0e6; max-width:280px; line-height:1.6;}
   .btn{
@@ -209,7 +216,7 @@
   .howto-content{
     width:100%;
     max-width:320px;
-    max-height:220px;
+    max-height:300px;
     overflow-y:auto;
     text-align:left;
     padding-right:6px;
@@ -241,6 +248,16 @@
     letter-spacing:1px;
   }
   .keys b{ color:var(--ink); }
+  @media (max-width:480px){
+    .title{ font-size:18px; letter-spacing:3px; }
+    .overlay{ gap:7px; padding:12px 14px 16px; }
+    .overlay h2{ font-size:18px; margin-top:0; }
+    .overlay p{ font-size:12px; line-height:1.45; }
+    .btn{ font-size:12px; padding:9px 18px; }
+    .btn-secondary{ font-size:11px; padding:7px 16px; }
+    .keys{ font-size:10.5px; }
+    .howto-content{ max-height:170px; }
+  }
 </style>
 </head>
 <body>
@@ -313,6 +330,20 @@
       </div>
       <button class="btn" id="closeHowToBtn">とじる</button>
     </div>
+    <div class="overlay hide" id="pauseOverlay">
+      <div id="pauseMain">
+        <h2>PAUSED</h2>
+        <p>ESCキーでも再開できます</p>
+        <button class="btn" id="resumeBtn">つづける ▶</button>
+        <button class="btn btn-secondary" id="pauseToTitleBtn">タイトルへ戻る</button>
+      </div>
+      <div id="pauseConfirm" class="hide">
+        <h2>タイトルへ戻りますか？</h2>
+        <p>ここまでの進行状況は失われます</p>
+        <button class="btn" id="confirmToTitleBtn">はい、戻る</button>
+        <button class="btn btn-secondary" id="cancelToTitleBtn">キャンセル</button>
+      </div>
+    </div>
   </div>
   <button class="touch-jump-btn" id="touchJumpBtn">JUMP</button>
 </div>
@@ -329,6 +360,8 @@
   const SPEED_UP_INTERVAL_COURSES = 7;
   const SPEED_UP_INCREMENT = 0.35;
   const MAX_AUTO_SPEED = 6.0;
+  const TURRET_FIRE_INTERVAL = 120; // 約2秒間隔（60fps想定）
+  const BULLET_SPEED = 4.2;
 
   const coinCountEl = document.getElementById('coinCount');
   const lifeCountEl = document.getElementById('lifeCount');
@@ -352,6 +385,13 @@
   const startBtn = document.getElementById('startBtn');
   const retryBtn = document.getElementById('retryBtn');
   const toTitleBtn = document.getElementById('toTitleBtn');
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const pauseToTitleBtn = document.getElementById('pauseToTitleBtn');
+  const pauseMain = document.getElementById('pauseMain');
+  const pauseConfirm = document.getElementById('pauseConfirm');
+  const confirmToTitleBtn = document.getElementById('confirmToTitleBtn');
+  const cancelToTitleBtn = document.getElementById('cancelToTitleBtn');
   const howToBtn = document.getElementById('howToBtn');
   const closeHowToBtn = document.getElementById('closeHowToBtn');
 
@@ -444,6 +484,16 @@
         });
       }
 
+      // スピードアップ後は、砲台を持つ動かない敵もたまに配置する
+      if (hoppersUnlocked && Math.random() < 0.3 && platW > 130) {
+        const tx = cursor + platW * (0.3 + Math.random() * 0.4) - 14;
+        enemies.push({
+          type:'turret',
+          x: tx, y: GROUND_Y - 26, w:28, h:26,
+          fireTimer: 40 + Math.floor(Math.random() * 100),
+        });
+      }
+
       // 地面付近にコインを散らす
       if (Math.random() < 0.7) {
         coins.push(makeCoin(cursor + platW * (0.3 + Math.random()*0.4), GROUND_Y - 40));
@@ -459,7 +509,7 @@
 
     const goal = {x: goalX, y:20, w:36, h: GROUND_Y - 20};
 
-    return {width, platforms, pits, coins, enemies, goal};
+    return {width, platforms, pits, coins, enemies, goal, bullets: []};
   }
 
   let level, player, camX, coins, lives, keys, gameState, animT, course, banner, nextLifeBonus, respawnTimer;
@@ -511,6 +561,9 @@
     lifeCountEl.textContent = lives;
     courseCountEl.textContent = course;
     endOverlay.classList.add('hide');
+    pauseOverlay.classList.add('hide');
+    pauseConfirm.classList.add('hide');
+    pauseMain.classList.remove('hide');
     resetSlotDisplay();
   }
 
@@ -585,10 +638,68 @@
       if (en.type === 'hopper') {
         // 一定周期で跳ねるように上下する
         en.y = en.baseY - Math.abs(Math.sin((animT + en.phase) * en.hopSpeed)) * en.hopHeight;
+      } else if (en.type === 'turret') {
+        // 移動はせず、一定間隔でプレイヤーへ弾を発射する
+        en.fireTimer--;
+        if (en.fireTimer <= 0) {
+          en.fireTimer = TURRET_FIRE_INTERVAL;
+          const dx = (player.x + player.w/2) - (en.x + en.w/2);
+          const dy = (player.y + player.h/2) - (en.y - 6);
+          const dist = Math.max(1, Math.hypot(dx, dy));
+          level.bullets.push({
+            x: en.x + en.w/2, y: en.y - 6,
+            vx: (dx / dist) * BULLET_SPEED,
+            vy: (dy / dist) * BULLET_SPEED,
+            w:10, h:10,
+          });
+          playTurretShotSound();
+        }
       } else {
         en.x += en.dir * en.speed;
         if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
       }
+    }
+
+    // 砲台の弾の移動
+    for (const b of level.bullets) {
+      b.x += b.vx;
+      b.y += b.vy;
+    }
+    // 画面から大きく外れた弾を除去
+    level.bullets = level.bullets.filter(b =>
+      b.x > camX - 100 && b.x < camX + W + 100 && b.y > -100 && b.y < H + 100
+    );
+
+    // 弾とプレイヤーの当たり判定
+    for (const b of level.bullets) {
+      if (!rectsOverlap(player, b)) continue;
+
+      // ハチマキ：踏むと弾を無効化できる
+      const isStompBullet = ownedPowerups.headband && player.vy > 0 &&
+        (player.y + player.h - b.y) < b.h * 0.6;
+      if (isStompBullet) {
+        level.bullets = level.bullets.filter(b2 => b2 !== b);
+        playEnemyDefeatSound();
+        continue;
+      }
+
+      // 無敵中は弾が無効化される
+      if (player.hurtTimer > 0) {
+        level.bullets = level.bullets.filter(b2 => b2 !== b);
+        playEnemyDefeatSound();
+        continue;
+      }
+
+      // アーマー：1コースにつき1回だけ弾を防げる
+      if (ownedPowerups.armor && armorChargeAvailable) {
+        armorChargeAvailable = false;
+        level.bullets = level.bullets.filter(b2 => b2 !== b);
+        playArmorClangSound();
+        continue;
+      }
+
+      loseLife(false);
+      return;
     }
 
     // 敵との当たり判定（無敵中は逆に倒せる。パワーアップでも倒せる場合がある）
@@ -769,6 +880,26 @@
       [420, 610, 970, 1450].forEach((freq, i) => {
         tone(freq, 'square', 0.11 - i * 0.015, 0.14 - i * 0.02, now + i * 0.004);
       });
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playTurretShotSound() {
+    // 砲台が弾を発射する時の短い「ピュン」という音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(900, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.09);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.11);
     } catch (e) {
       // 音声が使えない場合は何もせず失敗させる
     }
@@ -1316,7 +1447,8 @@
     // 敵
     for (const en of level.enemies) {
       const isHopper = en.type === 'hopper';
-      ctx.fillStyle = isHopper ? '#f9c80e' : '#ff4d6d';
+      const isTurret = en.type === 'turret';
+      ctx.fillStyle = isHopper ? '#f9c80e' : (isTurret ? '#3ddc73' : '#ff4d6d');
       ctx.beginPath();
       if (isHopper) {
         // 跳ねの高さに応じて潰れたり伸びたりするスクワッシュ＆ストレッチ
@@ -1328,10 +1460,33 @@
         ctx.ellipse(en.x + en.w/2, en.y + en.h/2, en.w/2, en.h/2, 0, 0, Math.PI*2);
       }
       ctx.fill();
+
+      if (isTurret) {
+        // 背中の砲台
+        ctx.fillStyle = '#1b1430';
+        ctx.fillRect(en.x + en.w/2 - 3, en.y - 10, 6, 12);
+        ctx.fillStyle = '#3ddc73';
+        ctx.beginPath();
+        ctx.arc(en.x + en.w/2, en.y - 10, 4, 0, Math.PI*2);
+        ctx.fill();
+      }
+
       ctx.fillStyle = '#fff';
-      const eyeDx = isHopper ? 0 : en.dir * 4;
+      const eyeDx = (isHopper || isTurret) ? 0 : en.dir * 4;
       ctx.beginPath();
       ctx.arc(en.x + en.w/2 + eyeDx, en.y + en.h/2 - 3, 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // 砲台の弾
+    for (const b of level.bullets) {
+      ctx.fillStyle = 'rgba(61,220,115,0.35)';
+      ctx.beginPath();
+      ctx.arc(b.x - b.vx*1.4, b.y - b.vy*1.4, (b.w/2) * 0.7, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#3ddc73';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.w/2, 0, Math.PI*2);
       ctx.fill();
     }
 
@@ -1402,16 +1557,6 @@
     ctx.save();
     ctx.fillStyle = 'rgba(10,6,24,0.6)';
     ctx.fillRect(0, 0, W, H);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#3fe0d0';
-    ctx.shadowColor = 'rgba(63,224,208,0.7)';
-    ctx.shadowBlur = 16;
-    ctx.font = '900 32px Trebuchet MS, sans-serif';
-    ctx.fillText('PAUSED', W/2, H/2 - 6);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#c9c0e6';
-    ctx.font = '13px Trebuchet MS, sans-serif';
-    ctx.fillText('ESC で再開', W/2, H/2 + 22);
     ctx.restore();
   }
 
@@ -1609,10 +1754,12 @@
       gameState = 'paused';
       stopBGM();
       playPauseOnSound();
+      pauseOverlay.classList.remove('hide');
     } else if (gameState === 'paused') {
       gameState = 'playing';
       resumeBGM();
       playPauseOffSound();
+      pauseOverlay.classList.add('hide');
     }
   }
 
@@ -1652,6 +1799,23 @@
   });
   muteBtn.addEventListener('click', toggleMute);
   pauseBtn.addEventListener('click', togglePause);
+  resumeBtn.addEventListener('click', togglePause);
+  pauseToTitleBtn.addEventListener('click', () => {
+    pauseMain.classList.add('hide');
+    pauseConfirm.classList.remove('hide');
+  });
+  cancelToTitleBtn.addEventListener('click', () => {
+    pauseConfirm.classList.add('hide');
+    pauseMain.classList.remove('hide');
+  });
+  confirmToTitleBtn.addEventListener('click', () => {
+    pauseOverlay.classList.add('hide');
+    pauseConfirm.classList.add('hide');
+    pauseMain.classList.remove('hide');
+    resetGame();
+    gameState = 'idle';
+    startOverlay.classList.remove('hide');
+  });
 
   // タッチ用ジャンプボタン — キーボード操作と併用でき、置き換えるものではない
   touchJumpBtn.addEventListener('touchstart', (e) => {
