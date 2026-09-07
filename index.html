@@ -179,6 +179,51 @@
     align-items:center;
     gap:10px;
   }
+  .dialogue-overlay{
+    position:absolute; inset:0;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding:18px;
+    background:rgba(6,4,16,0.25);
+  }
+  .dialogue-overlay.hide{ display:none; }
+  .dialogue-box{
+    width:100%;
+    max-width:480px;
+    background:rgba(10,6,24,0.94);
+    border:2px solid var(--accent2);
+    border-radius:12px;
+    padding:14px 18px 12px;
+    box-shadow:0 10px 28px rgba(0,0,0,0.55);
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .dialogue-name{
+    font-size:12px;
+    font-weight:900;
+    letter-spacing:2px;
+    color:var(--accent);
+    margin-bottom:6px;
+  }
+  .dialogue-text{
+    font-size:13.5px;
+    color:var(--ink);
+    line-height:1.7;
+    min-height:2.9em;
+  }
+  .dialogue-next{
+    text-align:right;
+    font-size:11px;
+    color:#8f86b8;
+    margin-top:6px;
+    animation:blinkNext 1.2s infinite;
+  }
+  @keyframes blinkNext{
+    0%,100%{ opacity:0.3; }
+    50%{ opacity:1; }
+  }
   .overlay h2{
     font-size:22px;
     letter-spacing:3px;
@@ -277,7 +322,7 @@
     <div class="hud">
       <div class="course">🚩 COURSE <span id="courseCount">1</span></div>
       <div class="coins">🪙 <span id="coinCount">0</span></div>
-      <div class="lives">❤ <span id="lifeCount">3</span></div>
+      <div class="lives">❤ <span id="lifeCount">5</span></div>
       <button class="touch-pause-btn" id="pauseBtn">⏸</button>
       <button class="mute-btn" id="muteBtn">🔊</button>
     </div>
@@ -286,6 +331,7 @@
       <p>キャラクターは自動で前進します。コインを集めながらタイミングよくジャンプしてゴールへ。ゴールするたびに敵や穴の配置が変わる新しいコースに突入します。</p>
       <button class="btn" id="startBtn">START ▶</button>
       <button class="btn btn-secondary" id="howToBtn">あそびかた</button>
+      <button class="btn btn-secondary" id="testBossBtn">🛠 ボス戦テスト</button>
       <div class="keys" id="keysHint">SPACE か ↑ <b>ジャンプ(2段ジャンプ可)</b> ／ ESC <b>一時中断</b></div>
     </div>
     <div class="overlay hide" id="endOverlay">
@@ -324,11 +370,18 @@
           <div class="howto-heading">🌕 満月のパワーアップ</div>
           <div class="howto-line">満月になるたびに、まだ持っていないパワーアップを1つランダムで獲得します（3つとも揃った後はライフ+1）。</div>
           <div class="howto-line"><b>スーパーシューズ</b> … 3段ジャンプが可能に</div>
-          <div class="howto-line"><b>スーパーアーマー</b> … 1コースにつき1回、敵との接触を無効化（穴は対象外）</div>
-          <div class="howto-line"><b>スーパーハチマキ</b> … 敵を踏むと倒せるように</div>
+          <div class="howto-line"><b>スーパーバリア</b> … 1コースにつき1回、敵との接触を無効化（穴は対象外）。周囲の緑の輪が充填中の目印</div>
+          <div class="howto-line"><b>スーパーターバン</b> … 敵を踏むと倒せるように</div>
         </div>
       </div>
       <button class="btn" id="closeHowToBtn">とじる</button>
+    </div>
+    <div class="dialogue-overlay hide" id="dialogueOverlay">
+      <div class="dialogue-box" id="dialogueBox">
+        <div class="dialogue-name" id="dialogueName"></div>
+        <div class="dialogue-text" id="dialogueText"></div>
+        <div class="dialogue-next">▼ タップして次へ</div>
+      </div>
     </div>
     <div class="overlay hide" id="pauseOverlay">
       <div id="pauseMain">
@@ -356,12 +409,21 @@
   const GROUND_Y = H - 40;
   const GRAVITY = 0.6;
   const JUMP_V = -11.5;
+  const PLAYER_WIDTH = 30;
   const BASE_AUTO_SPEED = 3.2;
   const SPEED_UP_INTERVAL_COURSES = 7;
   const SPEED_UP_INCREMENT = 0.35;
   const MAX_AUTO_SPEED = 6.0;
   const TURRET_FIRE_INTERVAL = 120; // 約2秒間隔（60fps想定）
   const BULLET_SPEED = 4.2;
+  const DIVER_SPAWN_MIN = 260; // 出現間隔の最短フレーム数
+  const DIVER_SPAWN_MAX = 480; // 出現間隔の最長フレーム数
+  const DIVER_SPEED = 3.6;
+  const FINAL_BOSS_COURSE = 30;
+  const BOSS_ATTACK_INTERVAL = 150; // 攻撃の間隔（約2.5秒）
+  const BOSS_TELEGRAPH_FRAMES = 30; // 攻撃前の予兆時間（約0.5秒）
+  const BOSS_SHOT_SPEED = 4.0;
+  const BOSS_BALL_STAGGER = 14; // 3連射の間隔（フレーム）
 
   const coinCountEl = document.getElementById('coinCount');
   const lifeCountEl = document.getElementById('lifeCount');
@@ -393,7 +455,12 @@
   const confirmToTitleBtn = document.getElementById('confirmToTitleBtn');
   const cancelToTitleBtn = document.getElementById('cancelToTitleBtn');
   const howToBtn = document.getElementById('howToBtn');
+  const testBossBtn = document.getElementById('testBossBtn');
   const closeHowToBtn = document.getElementById('closeHowToBtn');
+  const dialogueOverlay = document.getElementById('dialogueOverlay');
+  const dialogueBox = document.getElementById('dialogueBox');
+  const dialogueName = document.getElementById('dialogueName');
+  const dialogueText = document.getElementById('dialogueText');
 
   // ---- コインの種類：黄(1枚)が最も多く出現、青(5枚)はやや少なめ、赤(10枚)は最もレア ----
   const COIN_TYPES = [
@@ -425,8 +492,15 @@
     const pits = [];
     const coins = [];
     const enemies = [];
-    // スピードアップが一度も発生していないうちは跳ねる敵を出さない
-    const hoppersUnlocked = course > SPEED_UP_INTERVAL_COURSES;
+    // 満月のたびに敵の新パターンを1つずつ解禁：黄(跳ねる)→緑(砲台)→銀(ダイバー)
+    const unlockCount = fullMoonEnemyUnlockCount || 0;
+    const yellowUnlocked = unlockCount >= 1;
+    const greenUnlocked = unlockCount >= 2;
+    // パワーアップを2つ以上獲得するまでは、空中の地形に敵を配置しない
+    const ownedPowerupCount = ownedPowerups
+      ? ['shoes', 'barrier', 'turban'].filter(k => ownedPowerups[k]).length
+      : 0;
+    const aerialEnemiesUnlocked = ownedPowerupCount >= 2;
 
     // 安全なスタート地点の足場
     platforms.push({x:0, y:GROUND_Y, w:300, h:40});
@@ -437,9 +511,9 @@
     const genLimit = goalX - finalRunwayMin;
 
     while (cursor < genLimit) {
-      // 穴の幅は、1段・2段ジャンプで越えられる範囲に制限
+      // 穴の幅は、1段・2段ジャンプで越えられる範囲に制限（自機の幅より必ず広くし、落下できない穴を防ぐ）
       const pitW = Math.min(60 + Math.floor(Math.random() * 55), Math.max(0, genLimit - cursor));
-      if (pitW < 20) break;
+      if (pitW < PLAYER_WIDTH + 10) break;
       pits.push({x:cursor, w:pitW});
       cursor += pitW;
 
@@ -456,6 +530,37 @@
         platforms.push({x:fx, y:fy, w:fw, h:20});
         coins.push(makeCoin(fx + fw*0.3, fy - 20));
         coins.push(makeCoin(fx + fw*0.65, fy - 20));
+
+        // 空中の足場にも低確率で敵を配置する（地上よりは出現率を落とす。最初のパワーアップ獲得まではなし）
+        const aerialBaseY = fy - 24;
+        if (aerialEnemiesUnlocked && fw > 60 && Math.random() < 0.18) {
+          const speed = 0.9 + Math.random() * 0.7;
+          enemies.push({
+            type:'walker',
+            x: fx + 8, y: aerialBaseY, w:28, h:24,
+            range: [fx + 4, Math.max(fx + 4, fx + fw - 32)],
+            dir: 1, speed
+          });
+        } else if (aerialEnemiesUnlocked && yellowUnlocked && fw > 60 && Math.random() < 0.12) {
+          const hopHeight = 18 + Math.floor(Math.random() * 10);
+          const periodFrames = 70 + Math.floor(Math.random() * 40);
+          enemies.push({
+            type:'hopper',
+            x: fx + fw * 0.4, y: aerialBaseY, w:28, h:24,
+            baseY: aerialBaseY,
+            hopHeight,
+            hopSpeed: (2 * Math.PI) / periodFrames,
+            phase: Math.random() * periodFrames,
+            range: [fx + 4, Math.max(fx + 4, fx + fw - 32)],
+            dir: 1, speed: 0.8 + Math.random() * 0.6
+          });
+        } else if (aerialEnemiesUnlocked && greenUnlocked && Math.random() < 0.1) {
+          enemies.push({
+            type:'turret',
+            x: fx + fw * 0.4 - 14, y: fy - 26, w:28, h:26,
+            fireTimer: 30 + Math.floor(Math.random() * 90),
+          });
+        }
       }
 
       // たまにこの足場を敵が徘徊するようにする
@@ -469,8 +574,8 @@
         });
       }
 
-      // スピードアップ後は、一定周期で跳ねる敵もたまに配置する
-      if (hoppersUnlocked && Math.random() < 0.35 && platW > 130) {
+      // 満月1回目以降は、一定周期で跳ねる黄色い敵もたまに配置する
+      if (yellowUnlocked && Math.random() < 0.35 && platW > 130) {
         const hopHeight = 26 + Math.floor(Math.random() * 14);
         const periodFrames = 70 + Math.floor(Math.random() * 40);
         const hx = cursor + platW * (0.3 + Math.random() * 0.4) - 14;
@@ -481,11 +586,13 @@
           hopHeight,
           hopSpeed: (2 * Math.PI) / periodFrames,
           phase: Math.random() * periodFrames,
+          range: [cursor + 4, Math.max(cursor + 4, cursor + platW - 32)],
+          dir: 1, speed: 0.8 + Math.random() * 0.6
         });
       }
 
-      // スピードアップ後は、砲台を持つ動かない敵もたまに配置する
-      if (hoppersUnlocked && Math.random() < 0.3 && platW > 130) {
+      // 満月2回目以降は、砲台を持つ緑色の動かない敵もたまに配置する
+      if (greenUnlocked && Math.random() < 0.3 && platW > 130) {
         const tx = cursor + platW * (0.3 + Math.random() * 0.4) - 14;
         enemies.push({
           type:'turret',
@@ -513,7 +620,9 @@
   }
 
   let level, player, camX, coins, lives, keys, gameState, animT, course, banner, nextLifeBonus, respawnTimer;
-  let nextSlotBonus, slotBusy, slotQueueCount, nextCourseFullMoon, currentAutoSpeed, slotInvincibleTimer, slotWinBanner, moonCount, moonDir, ownedPowerups, armorChargeAvailable;
+  let nextSlotBonus, slotBusy, slotQueueCount, nextCourseFullMoon, currentAutoSpeed, slotInvincibleTimer, slotWinBanner, moonCount, moonDir, ownedPowerups, barrierChargeAvailable, diverSpawnTimer, fullMoonEnemyUnlockCount;
+  let isBossStage, boss;
+  let cameraZoom, cameraCenterX;
 
   const LIFE_BONUS_STEP = 100;
   const SLOT_BONUS_STEP = 50;
@@ -532,14 +641,21 @@
 
   function resetGame() {
     course = 1;
+    ownedPowerups = {shoes:false, barrier:false, turban:false};
+    barrierChargeAvailable = false;
+    fullMoonEnemyUnlockCount = 0;
+    isBossStage = false;
+    boss = null;
+    cameraZoom = 1;
+    cameraCenterX = 0;
     level = buildLevel(course);
     player = {
-      x:40, y:GROUND_Y-40, w:30, h:40,
+      x:40, y:GROUND_Y-40, w:PLAYER_WIDTH, h:40,
       vx:0, vy:0, onGround:false, facing:1, hurtTimer:0, jumpsUsed:0
     };
     camX = 0;
     coins = 0;
-    lives = 3;
+    lives = 5;
     nextLifeBonus = LIFE_BONUS_STEP;
     nextSlotBonus = SLOT_BONUS_STEP;
     currentAutoSpeed = BASE_AUTO_SPEED;
@@ -549,8 +665,7 @@
     nextCourseFullMoon = false;
     moonCount = 0;
     moonDir = 1;
-    ownedPowerups = {shoes:false, armor:false, headband:false};
-    armorChargeAvailable = false;
+    diverSpawnTimer = DIVER_SPAWN_MIN + Math.floor(Math.random() * (DIVER_SPAWN_MAX - DIVER_SPAWN_MIN));
     keys = {};
     gameState = 'playing';
     animT = 0;
@@ -564,6 +679,7 @@
     pauseOverlay.classList.add('hide');
     pauseConfirm.classList.add('hide');
     pauseMain.classList.remove('hide');
+    dialogueOverlay.classList.add('hide');
     resetSlotDisplay();
   }
 
@@ -614,17 +730,10 @@
       }
     }
 
-    // 穴に落下 → ライフを失う（無敵中は地面が実体化したように扱い、落下しない）
-    if (!player.onGround && ny + player.h >= GROUND_Y) {
-      if (player.hurtTimer > 0) {
-        ny = GROUND_Y - player.h;
-        player.vy = 0;
-        player.onGround = true;
-        player.jumpsUsed = 0;
-      } else if (ny + player.h >= GROUND_Y + 60) {
-        loseLife(true);
-        return;
-      }
+    // 穴に落下 → 無敵中であってもライフを失う（ミス扱い）
+    if (!player.onGround && ny + player.h >= GROUND_Y + 60) {
+      loseLife(true);
+      return;
     }
 
     // コースの幅に収まるように制限
@@ -636,8 +745,10 @@
     // 敵の移動処理
     for (const en of level.enemies) {
       if (en.type === 'hopper') {
-        // 一定周期で跳ねるように上下する
+        // 上下に跳ねながら、通常の敵同様に左右へも徘徊する
         en.y = en.baseY - Math.abs(Math.sin((animT + en.phase) * en.hopSpeed)) * en.hopHeight;
+        en.x += en.dir * en.speed;
+        if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
       } else if (en.type === 'turret') {
         // 移動はせず、一定間隔でプレイヤーへ弾を発射する
         en.fireTimer--;
@@ -654,9 +765,37 @@
           });
           playTurretShotSound();
         }
+      } else if (en.type === 'diver') {
+        // 直線に飛んでくるだけで、追尾や向き変更はしない
+        en.x += en.vx;
+        en.y += en.vy;
       } else {
         en.x += en.dir * en.speed;
         if (en.x < en.range[0] || en.x + en.w > en.range[1]) en.dir *= -1;
+      }
+    }
+
+    // 画面から大きく外れたダイバー敵を除去
+    level.enemies = level.enemies.filter(en =>
+      en.type !== 'diver' || (en.x > camX - 150 && en.x < camX + W + 300)
+    );
+
+    // 満月3回目以降、一定間隔で銀色のダイバー敵を右側から出現させる（ボス戦中は出現しない）
+    if (!isBossStage && fullMoonEnemyUnlockCount >= 3) {
+      diverSpawnTimer--;
+      if (diverSpawnTimer <= 0) {
+        diverSpawnTimer = DIVER_SPAWN_MIN + Math.floor(Math.random() * (DIVER_SPAWN_MAX - DIVER_SPAWN_MIN));
+        const dw = 24, dh = 22;
+        const spawnCx = camX + W + 30;
+        const spawnCy = 40 + Math.random() * (GROUND_Y - 80);
+        const dx = (player.x + player.w/2) - spawnCx;
+        const dy = (player.y + player.h/2) - spawnCy;
+        const dist = Math.max(1, Math.hypot(dx, dy));
+        level.enemies.push({
+          type:'diver', x: spawnCx - dw/2, y: spawnCy - dh/2, w:dw, h:dh,
+          vx: (dx / dist) * DIVER_SPEED,
+          vy: (dy / dist) * DIVER_SPEED,
+        });
       }
     }
 
@@ -664,18 +803,30 @@
     for (const b of level.bullets) {
       b.x += b.vx;
       b.y += b.vy;
+      if (b.bounce) {
+        // バウンドする玉：重力を受けて、地面で跳ね返る（穴の上では跳ねずに落ちる）
+        b.vy += 0.35;
+        const floorY = GROUND_Y - b.h / 2;
+        if (b.y >= floorY && !isOverPit(b.x, 0)) {
+          b.y = floorY;
+          b.vy *= -0.62;
+          b.bounces = (b.bounces || 0) + 1;
+        }
+      }
     }
-    // 画面から大きく外れた弾を除去
+    // 画面から大きく外れた弾、跳ねすぎた玉、穴に落ちた玉を除去
     level.bullets = level.bullets.filter(b =>
-      b.x > camX - 100 && b.x < camX + W + 100 && b.y > -100 && b.y < H + 100
+      b.x > camX - 100 && b.x < camX + W + 100 && b.y > -100 && b.y < H + 100 &&
+      !(b.bounce && b.bounces >= 4) &&
+      !(b.bounce && b.y > GROUND_Y + 40 && isOverPit(b.x, 0))
     );
 
     // 弾とプレイヤーの当たり判定
     for (const b of level.bullets) {
       if (!rectsOverlap(player, b)) continue;
 
-      // ハチマキ：踏むと弾を無効化できる
-      const isStompBullet = ownedPowerups.headband && player.vy > 0 &&
+      // ターバン：踏むと弾を無効化できる
+      const isStompBullet = ownedPowerups.turban && player.vy > 0 &&
         (player.y + player.h - b.y) < b.h * 0.6;
       if (isStompBullet) {
         level.bullets = level.bullets.filter(b2 => b2 !== b);
@@ -690,11 +841,11 @@
         continue;
       }
 
-      // アーマー：1コースにつき1回だけ弾を防げる
-      if (ownedPowerups.armor && armorChargeAvailable) {
-        armorChargeAvailable = false;
+      // バリア：1コースにつき1回だけ弾を防げる
+      if (ownedPowerups.barrier && barrierChargeAvailable) {
+        barrierChargeAvailable = false;
         level.bullets = level.bullets.filter(b2 => b2 !== b);
-        playArmorClangSound();
+        playBarrierClangSound();
         continue;
       }
 
@@ -702,26 +853,94 @@
       return;
     }
 
+    // ボスの移動・攻撃・接触判定
+    if (isBossStage && boss && !boss.defeated) {
+      // 自機よりわずかに遅く前進するので、自機は追いつける
+      boss.x += boss.speed;
+
+      // 前方に穴があれば、着地している時にジャンプして飛び越える
+      if (boss.onGround) {
+        const frontX = boss.x + boss.w;
+        const lookahead = 30;
+        for (const pit of level.pits) {
+          if (pit.x <= frontX + lookahead && pit.x + pit.w > frontX) {
+            boss.vy = JUMP_V;
+            boss.onGround = false;
+            break;
+          }
+        }
+      }
+
+      // 重力とジャンプの上下運動
+      boss.vy += GRAVITY;
+      boss.y += boss.vy;
+      if (boss.y >= GROUND_Y - boss.h) {
+        boss.y = GROUND_Y - boss.h;
+        boss.vy = 0;
+        boss.onGround = true;
+      }
+
+      // 玉の3連射を順番に発射中
+      if (boss.pendingBalls > 0) {
+        boss.pendingBallTimer--;
+        if (boss.pendingBallTimer <= 0) {
+          boss.pendingBallTimer = BOSS_BALL_STAGGER;
+          level.bullets.push({
+            x: boss.x, y: boss.y,
+            vx: -3.0 - Math.random(),
+            vy: -6.5 - Math.random() * 1.5,
+            w:14, h:14,
+            bounce: true, bounces: 0, boss: true,
+          });
+          playBossShotSound();
+          boss.pendingBalls--;
+        }
+      } else {
+        boss.attackTimer--;
+        if (boss.attackTimer === BOSS_TELEGRAPH_FRAMES) {
+          // 攻撃の0.5秒前：どちらの攻撃が来るか決めて予兆を出す
+          boss.telegraphType = Math.random() < 0.5 ? 'bounce' : 'direct';
+          playBossTelegraphSound(boss.telegraphType);
+        }
+        if (boss.attackTimer <= 0) {
+          boss.attackTimer = BOSS_ATTACK_INTERVAL;
+          if (boss.telegraphType === 'bounce') {
+            bossStartBounceVolley();
+          } else {
+            bossFireDirectShot();
+          }
+          boss.telegraphType = null;
+        }
+      }
+
+      // 自機が触れたらボスを倒す
+      if (rectsOverlap(player, boss)) {
+        defeatBoss();
+        return;
+      }
+    }
+
     // 敵との当たり判定（無敵中は逆に倒せる。パワーアップでも倒せる場合がある）
     if (player.hurtTimer <= 0) {
       for (const en of level.enemies) {
         if (!rectsOverlap(player, en)) continue;
 
-        // ハチマキ：落下中に上から踏むと倒せる
-        const isStomp = ownedPowerups.headband && player.vy > 0 &&
+        // ターバン：落下中に上から踏むと倒せる
+        const isStomp = ownedPowerups.turban && player.vy > 0 &&
           (player.y + player.h - en.y) < en.h * 0.6;
         if (isStomp) {
           level.enemies = level.enemies.filter(e2 => e2 !== en);
           player.vy = JUMP_V * 0.55; // 踏んだ反動で軽くバウンド
+          player.jumpsUsed = Math.max(0, player.jumpsUsed - 1); // ジャンプ回数を1回回復
           playEnemyDefeatSound();
           continue;
         }
 
-        // アーマー：1コースにつき1回だけ、接触した敵を倒してライフを守れる
-        if (ownedPowerups.armor && armorChargeAvailable) {
-          armorChargeAvailable = false;
+        // バリア：1コースにつき1回だけ、接触した敵を倒してライフを守れる
+        if (ownedPowerups.barrier && barrierChargeAvailable) {
+          barrierChargeAvailable = false;
           level.enemies = level.enemies.filter(e2 => e2 !== en);
-          playArmorClangSound();
+          playBarrierClangSound();
           continue;
         }
 
@@ -753,8 +972,8 @@
       return true;
     });
 
-    // ゴール判定
-    if (rectsOverlap(player, level.goal)) {
+    // ゴール判定（ボス戦中は旗ではなくボスに触れることがクリア条件）
+    if (!isBossStage && rectsOverlap(player, level.goal)) {
       nextCourse();
       return;
     }
@@ -764,14 +983,24 @@
     if (banner.timer > 0) banner.timer--;
     if (slotWinBanner.timer > 0) slotWinBanner.timer--;
 
-    // カメラをプレイヤーに追従させる
-    camX = Math.max(0, Math.min(player.x - W/2 + player.w/2, level.width - W));
+    // カメラをプレイヤーに追従させる（ボス戦中は両者が収まるようズームアウトする）
+    if (isBossStage && boss && !boss.defeated) {
+      const margin = 70;
+      const leftEdge = Math.min(player.x, boss.x) - margin;
+      const rightEdge = Math.max(player.x + player.w, boss.x + boss.w) + margin;
+      const span = Math.max(1, rightEdge - leftEdge);
+      cameraZoom = Math.min(1, W / span);
+      cameraCenterX = (leftEdge + rightEdge) / 2;
+      camX = cameraCenterX - (W / 2) / cameraZoom;
+    } else {
+      cameraZoom = 1;
+      camX = Math.max(0, Math.min(player.x - W/2 + player.w/2, level.width - W));
+    }
   }
 
   function nextCourse() {
     playGoalSound();
     course++;
-    level = buildLevel(course);
     player.x = 40;
     player.y = GROUND_Y - player.h;
     player.vx = 0;
@@ -804,10 +1033,117 @@
       }
       setMoonCount(next);
     }
-    // アーマーを持っている場合は、コースごとにシールドを補充する
-    if (ownedPowerups.armor) {
-      armorChargeAvailable = true;
+    // バリアを持っている場合は、コースごとにシールドを補充する
+    if (ownedPowerups.barrier) {
+      barrierChargeAvailable = true;
     }
+
+    if (course === FINAL_BOSS_COURSE) {
+      // 最終ステージ：ボス戦の専用アリーナに切り替え、会話を挟んでからボスを登場させる
+      isBossStage = true;
+      level = buildBossLevel();
+      gameState = 'dialogue';
+      startDialogue(BOSS_INTRO_SCRIPT, () => {
+        spawnBoss();
+        gameState = 'playing';
+        startBossBGM();
+      });
+    } else {
+      level = buildLevel(course);
+    }
+  }
+
+  // ボス戦専用のアリーナ（穴・コイン・通常の敵なし）
+  function buildBossLevel() {
+    // ボスに触れるまで終わらないよう、事実上無限の幅にする（ゴールの旗は使わない）
+    const width = 200000;
+    const platforms = [];
+    const pits = [];
+
+    // 安全なスタート地点の足場
+    platforms.push({x:0, y:GROUND_Y, w:300, h:40});
+    let cursor = 300;
+
+    // 通常ステージ同様、穴と足場を交互に並べる
+    while (cursor < width - 400) {
+      const pitW = 60 + Math.floor(Math.random() * 55);
+      pits.push({x:cursor, w:pitW});
+      cursor += pitW;
+
+      const platW = 150 + Math.floor(Math.random() * 160);
+      platforms.push({x:cursor, y:GROUND_Y, w:platW, h:40});
+      cursor += platW;
+    }
+    // 残りは平坦な足場で埋める
+    platforms.push({x:cursor, y:GROUND_Y, w: width - cursor, h:40});
+
+    return {
+      width,
+      platforms,
+      pits,
+      coins: [],
+      enemies: [],
+      bullets: [],
+    };
+  }
+
+  // ボスを登場させる
+  function spawnBoss() {
+    boss = {
+      x: player.x + 580,
+      y: GROUND_Y - 46,
+      w: 40, h: 46,
+      vy: 0,
+      onGround: true,
+      speed: currentAutoSpeed * 0.9, // 自機よりわずかに遅く逃げる（自機速度で約30秒で追いつく差）
+      attackTimer: BOSS_ATTACK_INTERVAL,
+      telegraphType: null,
+      pendingBalls: 0,
+      pendingBallTimer: 0,
+      defeated: false,
+    };
+  }
+
+  // バウンドする玉を3連射する攻撃を開始
+  function bossStartBounceVolley() {
+    boss.pendingBalls = 3;
+    boss.pendingBallTimer = 0;
+  }
+
+  // 自機へ直接弾を撃つ攻撃
+  function bossFireDirectShot() {
+    const dx = (player.x + player.w/2) - (boss.x + boss.w/2);
+    const dy = (player.y + player.h/2) - (boss.y + boss.h/2);
+    const dist = Math.max(1, Math.hypot(dx, dy));
+    level.bullets.push({
+      x: boss.x + boss.w/2, y: boss.y + boss.h/2,
+      vx: (dx / dist) * BOSS_SHOT_SPEED,
+      vy: (dy / dist) * BOSS_SHOT_SPEED,
+      w:12, h:12,
+      boss: true,
+    });
+    playBossShotSound();
+  }
+
+  // ボスを倒した時の処理
+  function defeatBoss() {
+    boss.defeated = true;
+    level.bullets = [];
+    gameState = 'dialogue';
+    stopBGM();
+    playVictorySound();
+    startDialogue(BOSS_DEFEAT_SCRIPT, () => {
+      showEnding();
+    });
+  }
+
+  // 全ステージクリア画面を表示
+  function showEnding() {
+    gameState = 'ended';
+    endTitle.textContent = 'GAME CLEAR!';
+    endSub.textContent = `全${FINAL_BOSS_COURSE}コースを走り抜けました！`;
+    endJoke.textContent = '';
+    endOverlay.classList.remove('hide');
   }
 
   function loseLife(fell) {
@@ -822,14 +1158,38 @@
       loseGame(fell);
       return;
     }
-    // 直前の安全な位置付近に復帰させる（簡易的に、現在の穴区間の手前まで戻す）
-    player.x = Math.max(20, player.x - 200);
+    if (isBossStage && boss) {
+      // ボス戦では、地形の左端まで戻さず、ボスから一定距離の位置に留める（穴の中には置かない）
+      player.x = safeGroundX(Math.max(20, boss.x - 480));
+    } else {
+      // ミスした地点が乗っていた地形（足場）の左端から再スタートさせる
+      player.x = Math.max(20, groundPlatformLeftEdge(player.x));
+    }
     player.y = GROUND_Y - player.h;
     player.vx = 0; player.vy = 0;
     player.hurtTimer = 120;
     player.onGround = true;
     player.jumpsUsed = 0;
     respawnTimer = RESPAWN_READY_FRAMES + RESPAWN_GO_FRAMES;
+  }
+
+  // 指定した位置が穴の中でも安全な足場の上になるよう補正する
+  function safeGroundX(x) {
+    for (const p of level.platforms) {
+      if (p.y === GROUND_Y && x >= p.x && x + PLAYER_WIDTH <= p.x + p.w) {
+        return x;
+      }
+    }
+    return Math.max(20, groundPlatformLeftEdge(x));
+  }
+
+  // 指定したx座標が乗っている（またはその手前にある）地上の足場の左端x座標を返す
+  function groundPlatformLeftEdge(x) {
+    let left = 0;
+    for (const p of level.platforms) {
+      if (p.y === GROUND_Y && p.x <= x && p.x > left) left = p.x;
+    }
+    return left;
   }
 
   function playEnemyHitSound() {
@@ -871,8 +1231,8 @@
     }
   }
 
-  function playArmorClangSound() {
-    // スーパーアーマーで敵を防いだ時の「ガキン」という金属音
+  function playBarrierClangSound() {
+    // スーパーバリアで敵を防いだ時の「ガキン」という金属音
     try {
       ensureAudio();
       const now = audioCtx.currentTime;
@@ -900,6 +1260,68 @@
       osc.connect(gain).connect(masterGain);
       osc.start(now);
       osc.stop(now + 0.11);
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playBossTelegraphSound(type) {
+    // 攻撃予兆音：バウンド玉は跳ねるような3音、直接狙撃は鋭い1音で聞き分けられるようにする
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      if (type === 'bounce') {
+        [740, 740, 740].forEach((freq, i) => {
+          tone(freq, 'triangle', 0.08, 0.09, now + i * 0.08);
+        });
+      } else {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.exponentialRampToValueAtTime(1100, now + 0.22);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain).connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playBossShotSound() {
+    // ボスの攻撃音（砲台より少し低く、重みのある音）
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(620, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.14);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+      osc.connect(gain).connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.17);
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playVictorySound() {
+    // 全ステージクリア時の華やかなファンファーレ
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const notes = [523, 659, 784, 1046, 1318, 1568, 2093];
+      notes.forEach((freq, i) => {
+        const t = now + i * 0.11;
+        tone(freq, 'triangle', 0.3, 0.13, t);
+        tone(freq * 1.5, 'sine', 0.18, 0.05, t + 0.02);
+      });
     } catch (e) {
       // 音声が使えない場合は何もせず失敗させる
     }
@@ -941,6 +1363,33 @@
         osc.start(start);
         osc.stop(start + 0.27);
       });
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playDialogueVoiceSound() {
+    // 会話ウィンドウ表示時の「ポポポポポポ…」という喋っている音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      const baseFreq = 340;
+      const count = 7;
+      for (let i = 0; i < count; i++) {
+        const freq = baseFreq + (Math.random() * 2 - 1) * 35 + (i % 2 === 0 ? 25 : 0);
+        tone(freq, 'square', 0.045, 0.07, now + i * 0.055);
+      }
+    } catch (e) {
+      // 音声が使えない場合は何もせず失敗させる
+    }
+  }
+
+  function playDialogueTapSound() {
+    // 会話ウィンドウをタップして次に進む時の短い音
+    try {
+      ensureAudio();
+      const now = audioCtx.currentTime;
+      tone(520, 'triangle', 0.06, 0.1, now);
     } catch (e) {
       // 音声が使えない場合は何もせず失敗させる
     }
@@ -1305,23 +1754,66 @@
   }
 
   // ---- 描画処理 ----
+  // 夜空にちりばめる星（一度だけ生成し、位置は固定）
+  const STARS = Array.from({length: 70}, () => ({
+    x: Math.random() * W,
+    y: Math.random() * (GROUND_Y - 20),
+    r: Math.random() * 1.6 + 0.4,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.02 + Math.random() * 0.04,
+  }));
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function lerpColor(c1, c2, t) {
+    return `rgb(${Math.round(lerp(c1[0], c2[0], t))},${Math.round(lerp(c1[1], c2[1], t))},${Math.round(lerp(c1[2], c2[2], t))})`;
+  }
+
   function drawBackground() {
-    const grad = ctx.createLinearGradient(0,0,0,H);
-    grad.addColorStop(0, '#2a1f5e');
-    grad.addColorStop(1, '#ff7f5c');
+    const fullness = moonFullnessFromCount();
+
+    // 空の色 — 満月に近づくほど、暗い夜空から月明かりで少し明るい夜空へ
+    const skyTopDark    = [6, 8, 22];
+    const skyBottomDark  = [18, 14, 42];
+    const skyTopBright   = [34, 42, 84];
+    const skyBottomBright = [64, 54, 102];
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, lerpColor(skyTopDark, skyTopBright, fullness));
+    grad.addColorStop(1, lerpColor(skyBottomDark, skyBottomBright, fullness));
     ctx.fillStyle = grad;
-    ctx.fillRect(0,0,W,H);
+    ctx.fillRect(0, 0, W, H);
+
+    // 星空（満月に近いほど月明かりでやや霞む）
+    const starAlphaBase = 0.85 - fullness * 0.35;
+    for (const s of STARS) {
+      const twinkle = 0.5 + 0.5 * Math.sin(animT * s.speed + s.phase);
+      ctx.globalAlpha = starAlphaBase * (0.4 + 0.6 * twinkle);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     // 視差（パララックス）のある丘
-    ctx.fillStyle = 'rgba(20,14,46,0.5)';
+    ctx.fillStyle = 'rgba(10,8,26,0.6)';
     for (let i = -1; i < 6; i++) {
       const bx = i * 260 - (camX * 0.3) % 260;
       ctx.beginPath();
       ctx.ellipse(bx, GROUND_Y + 40, 180, 90, 0, Math.PI, 0);
       ctx.fill();
     }
+
+    // 月明かりの光暈 — 満ちるほど大きく柔らかく広がる
+    const moonX = W - 90, moonY = 70;
+    const glowR = 60 + fullness * 70;
+    const glow = ctx.createRadialGradient(moonX, moonY, 4, moonX, moonY, glowR);
+    glow.addColorStop(0, `rgba(255,250,230,${0.05 + 0.35 * fullness})`);
+    glow.addColorStop(1, 'rgba(255,250,230,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(moonX - glowR, moonY - glowR, glowR * 2, glowR * 2);
+
     // 月 — スロットの効果も加味した「満月までのカウント」をもとに満ち欠けする
-    drawMoon(W - 90, 70, 34, moonFullnessFromCount());
+    drawMoon(moonX, moonY, 34, fullness);
   }
 
   // 「満月までのカウント」を月の「満ち具合」0〜1に変換する（0=細い三日月、1=満月）
@@ -1345,18 +1837,21 @@
   }
 
   const POWERUP_INFO = {
-    shoes:    {name:'SUPER SHOES!',    color:'#3fa9f5'},
-    armor:    {name:'SUPER ARMOR!',    color:'#c9ccd1'},
-    headband: {name:'SUPER HACHIMAKI!', color:'#f4f4f4'},
+    shoes:   {name:'SUPER SHOES!',   color:'#3fa9f5'},
+    barrier: {name:'SUPER BARRIER!', color:'#8cffaa'},
+    turban:  {name:'SUPER TURBAN!',  color:'#ff4d4d'},
   };
 
   function triggerFullMoonEvent() {
-    const notOwned = ['shoes', 'armor', 'headband'].filter(k => !ownedPowerups[k]);
+    // 満月のたびに、敵の新パターンを1つずつ解禁する（黄→緑→銀の順）
+    fullMoonEnemyUnlockCount = Math.min(3, fullMoonEnemyUnlockCount + 1);
+
+    const notOwned = ['shoes', 'barrier', 'turban'].filter(k => !ownedPowerups[k]);
     if (notOwned.length > 0) {
       // まだ持っていないパワーアップの中からランダムに1つ獲得する
       const picked = notOwned[Math.floor(Math.random() * notOwned.length)];
       ownedPowerups[picked] = true;
-      if (picked === 'armor') armorChargeAvailable = true;
+      if (picked === 'barrier') barrierChargeAvailable = true;
       const info = POWERUP_INFO[picked];
       slotWinBanner = {text: info.name, timer:130, color: info.color};
       playPowerupSound();
@@ -1415,7 +1910,14 @@
 
   function drawWorld() {
     ctx.save();
-    ctx.translate(-camX, 0);
+    if (cameraZoom < 1) {
+      // ボス戦でズームアウトしている時：中心点を軸に縮小して、両者を画面に収める
+      ctx.translate(W / 2, GROUND_Y);
+      ctx.scale(cameraZoom, cameraZoom);
+      ctx.translate(-cameraCenterX, -GROUND_Y);
+    } else {
+      ctx.translate(-camX, 0);
+    }
 
     // 足場
     for (const p of level.platforms) {
@@ -1448,6 +1950,48 @@
     for (const en of level.enemies) {
       const isHopper = en.type === 'hopper';
       const isTurret = en.type === 'turret';
+      const isDiver = en.type === 'diver';
+
+      if (isDiver) {
+        // 銀色の弾丸型の敵（進行方向に軌跡を残す）
+        const dcx = en.x + en.w/2, dcy = en.y + en.h/2;
+        const angle = Math.atan2(en.vy, en.vx);
+        const len = en.w, rad = en.h / 2;
+
+        // 軌跡の光
+        ctx.fillStyle = 'rgba(200,205,215,0.28)';
+        ctx.beginPath();
+        ctx.ellipse(dcx - en.vx * 1.6, dcy - en.vy * 1.6, len/2 * 0.55, rad * 0.55, angle, 0, Math.PI*2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(dcx, dcy);
+        ctx.rotate(angle);
+
+        // 弾丸のシルエット（先端が尖り、後ろが丸い）
+        ctx.fillStyle = '#c9ccd1';
+        ctx.beginPath();
+        ctx.moveTo(len * 0.55, 0);
+        ctx.lineTo(len * 0.12, -rad);
+        ctx.lineTo(-len * 0.38, -rad);
+        ctx.quadraticCurveTo(-len * 0.55, -rad, -len * 0.55, 0);
+        ctx.quadraticCurveTo(-len * 0.55, rad, -len * 0.38, rad);
+        ctx.lineTo(len * 0.12, rad);
+        ctx.closePath();
+        ctx.fill();
+
+        // 金属的なハイライト
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(len * 0.3, -rad * 0.4);
+        ctx.lineTo(-len * 0.3, -rad * 0.4);
+        ctx.stroke();
+
+        ctx.restore();
+        continue;
+      }
+
       ctx.fillStyle = isHopper ? '#f9c80e' : (isTurret ? '#3ddc73' : '#ff4d6d');
       ctx.beginPath();
       if (isHopper) {
@@ -1478,55 +2022,190 @@
       ctx.fill();
     }
 
-    // 砲台の弾
+    // 砲台の弾／ボスの攻撃
     for (const b of level.bullets) {
-      ctx.fillStyle = 'rgba(61,220,115,0.35)';
+      const bossColor = b.bounce ? '#c86bff' : '#ff5fd1';
+      ctx.fillStyle = b.boss ? `${bossColor}59` : 'rgba(61,220,115,0.35)';
       ctx.beginPath();
       ctx.arc(b.x - b.vx*1.4, b.y - b.vy*1.4, (b.w/2) * 0.7, 0, Math.PI*2);
       ctx.fill();
-      ctx.fillStyle = '#3ddc73';
+      ctx.fillStyle = b.boss ? bossColor : '#3ddc73';
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.w/2, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // ゴールの旗
-    ctx.fillStyle = '#8f86b8';
-    ctx.fillRect(level.goal.x + level.goal.w/2 - 2, level.goal.y, 4, level.goal.h);
-    ctx.fillStyle = '#3fe0d0';
-    ctx.beginPath();
-    ctx.moveTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 6);
-    ctx.lineTo(level.goal.x + level.goal.w/2 + 32, level.goal.y + 16);
-    ctx.lineTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 26);
-    ctx.closePath();
-    ctx.fill();
+    // ボス
+    if (isBossStage && boss && !boss.defeated) {
+      const bx = boss.x, by = boss.y, bw = boss.w, bh = boss.h;
+      ctx.fillStyle = '#241a3d';
+      ctx.beginPath();
+      ctx.ellipse(bx + bw/2, by + bh/2, bw/2, bh/2, 0, 0, Math.PI*2);
+      ctx.fill();
+      // マント状の裾
+      ctx.fillStyle = 'rgba(36,26,61,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(bx, by + bh*0.6);
+      ctx.lineTo(bx - 8, by + bh + 6);
+      ctx.lineTo(bx + bw*0.3, by + bh);
+      ctx.closePath();
+      ctx.fill();
+      // 光る目
+      const eyeGlow = 0.6 + 0.4 * Math.abs(Math.sin(animT * 0.15));
+      ctx.fillStyle = `rgba(255,77,109,${eyeGlow})`;
+      ctx.beginPath(); ctx.arc(bx + bw*0.32, by + bh*0.4, 3.4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(bx + bw*0.62, by + bh*0.4, 3.4, 0, Math.PI*2); ctx.fill();
 
-    // プレイヤー
+      // 攻撃の予兆（0.5秒前から、種類に応じて色とアイコンを変える）
+      if (boss.telegraphType) {
+        const telegraphColor = boss.telegraphType === 'bounce' ? '#c86bff' : '#ff5fd1';
+        const progress = 1 - boss.attackTimer / BOSS_TELEGRAPH_FRAMES; // 0→1で発射が近づく
+        const pulse = 0.5 + 0.5 * Math.sin(animT * 0.9);
+        ctx.save();
+        ctx.globalAlpha = 0.5 + 0.4 * pulse;
+        ctx.strokeStyle = telegraphColor;
+        ctx.lineWidth = 2 + progress * 2;
+        ctx.beginPath();
+        ctx.ellipse(bx + bw/2, by + bh/2, bw/2 + 6 + progress*6, bh/2 + 6 + progress*6, 0, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        if (boss.telegraphType === 'bounce') {
+          // 跳ねる玉を示す3つの丸
+          ctx.fillStyle = telegraphColor;
+          for (let i = 0; i < 3; i++) {
+            const ang = -0.6 + i * 0.6;
+            const ix = bx + bw/2 + Math.sin(ang) * 18;
+            const iy = by - 14 - Math.cos(ang) * 6;
+            ctx.beginPath(); ctx.arc(ix, iy, 3, 0, Math.PI*2); ctx.fill();
+          }
+        } else {
+          // 直接狙撃を示す矢印
+          ctx.fillStyle = telegraphColor;
+          ctx.beginPath();
+          ctx.moveTo(bx + bw/2 - 8, by - 18);
+          ctx.lineTo(bx + bw/2 + 8, by - 14);
+          ctx.lineTo(bx + bw/2 - 8, by - 10);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    // ゴールの旗（ボス戦中は旗を使わないため描画しない）
+    if (!isBossStage) {
+      ctx.fillStyle = '#8f86b8';
+      ctx.fillRect(level.goal.x + level.goal.w/2 - 2, level.goal.y, 4, level.goal.h);
+      ctx.fillStyle = '#3fe0d0';
+      ctx.beginPath();
+      ctx.moveTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 6);
+      ctx.lineTo(level.goal.x + level.goal.w/2 + 32, level.goal.y + 16);
+      ctx.lineTo(level.goal.x + level.goal.w/2 + 2, level.goal.y + 26);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // プレイヤー（ローブの少年：接地中は走るポーズ、空中はジャンプポーズ）
+    const px = player.x, py = player.y, pw = player.w, ph = player.h;
+    const cx = px + pw / 2;
     const hurt = player.hurtTimer > 0 && Math.floor(animT/4)%2===0;
-    ctx.fillStyle = hurt ? '#ff9fae' : '#ffd23f';
-    ctx.fillRect(player.x, player.y, player.w, player.h);
+    const robeColor = hurt ? '#ff9fae' : '#f4f0e6';
 
-    // パワーアップの見た目（獲得するたびに色が足されていく：靴＝下部を青く／鎧＝中央を銀色に／ハチマキ＝上部を白く）
-    if (ownedPowerups.shoes) {
-      ctx.fillStyle = '#3fa9f5';
-      ctx.fillRect(player.x, player.y + player.h - 10, player.w, 10);
+    if (player.onGround) {
+      drawPlayerRunningPose(px, py, pw, ph, cx, robeColor, hurt);
+    } else {
+      drawPlayerJumpingPose(px, py, pw, ph, cx, robeColor, hurt);
     }
-    if (ownedPowerups.armor) {
-      ctx.fillStyle = '#c9ccd1';
-      ctx.fillRect(player.x, player.y + player.h * 0.35, player.w, player.h * 0.3);
-    }
-    if (ownedPowerups.headband) {
-      ctx.fillStyle = '#f4f4f4';
-      ctx.fillRect(player.x, player.y, player.w, 8);
-    }
-
-    // 向いている方向を示す簡易的な目印
-    ctx.fillStyle = '#1b1430';
-    const eyeX = player.facing > 0 ? player.x + player.w - 9 : player.x + 5;
-    ctx.fillRect(eyeX, player.y + 8, 4, 4);
 
     ctx.restore();
   }
+
+  // 顔・グトラ（頭部と後ろだけを覆い、顔全体は見せる）— 走る／ジャンプ両ポーズ共通
+  // 丸いマスコットキャラクター（案1：まんまる）本体の描画
+  function drawRoundMascotBody(scaleX, scaleY, bodyColor, hurt) {
+    const shadeColor = hurt ? '#ff7f97' : '#e8e2d2';
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+
+    // 腕（右側のみ）
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath(); ctx.ellipse(16, 2, 6, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+    // 本体
+    ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI * 2); ctx.fill();
+
+    // 足（スーパーシューズ所持時は青く）
+    ctx.fillStyle = ownedPowerups.shoes ? '#3fa9f5' : shadeColor;
+    ctx.beginPath(); ctx.ellipse(-8, 17, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(8, 17, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+    // スーパーターバン（頭の形に沿う赤い布、後ろに結び目）
+    if (ownedPowerups.turban) {
+      ctx.fillStyle = '#e6473f';
+      ctx.beginPath();
+      ctx.arc(0, -1, 14.6, Math.PI * 1.06, Math.PI * 1.94);
+      ctx.closePath();
+      ctx.fill();
+      // 後ろ側（進行方向と逆＝左側）の結び目
+      ctx.beginPath();
+      ctx.ellipse(-11, -6, 3.2, 2.4, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 目（ひとつだけ。右向きに走っているイメージでやや右寄りに配置）
+    ctx.fillStyle = '#1b1430';
+    ctx.beginPath(); ctx.ellipse(3, -2, 2.6, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+    // 口
+    ctx.beginPath(); ctx.arc(3.5, 3, 1.2, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  // スーパーバリア — 充填中のみ、プレイヤーの周囲に薄い緑の円を表示
+  function drawBarrierRing(cx, cy) {
+    if (!(ownedPowerups.barrier && barrierChargeAvailable)) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(140,255,170,0.1)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 23, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(140,255,170,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 23, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 走るポーズ — 弾みながら転がるようなホップ＆ロールアニメーション
+  function drawPlayerRunningPose(px, py, pw, ph, cx, robeColor, hurt) {
+    const cy = py + ph / 2 + 6;
+    const t = animT * 0.28;
+    const hop = Math.abs(Math.sin(t));
+    const bounceY = -hop * 6;
+    const squashY = 1 - (1 - hop) * 0.18;
+    const stretchX = 1 + (1 - hop) * 0.12;
+    const tilt = Math.sin(t) * 0.14;
+    drawBarrierRing(cx, cy + bounceY);
+    ctx.save();
+    ctx.translate(cx, cy + bounceY);
+    ctx.rotate(tilt);
+    drawRoundMascotBody(stretchX, squashY, robeColor, hurt);
+    ctx.restore();
+  }
+
+  // ジャンプポーズ — 縦に伸びたシルエット
+  function drawPlayerJumpingPose(px, py, pw, ph, cx, robeColor, hurt) {
+    const cy = py + ph / 2 + 4;
+    drawBarrierRing(cx, cy);
+    ctx.save();
+    ctx.translate(cx, cy);
+    drawRoundMascotBody(0.9, 1.15, robeColor, hurt);
+    ctx.restore();
+  }
+
 
   function drawBanner() {
     if (banner.timer <= 0) return;
@@ -1678,74 +2357,60 @@
     }
   }
 
-  // ---- 簡易プロシージャルBGM（チップチューン風ループ） ----
-  const BGM_BPM = 132;
-  const MELODY_NORMAL = [523,0,659,0,784,659,523,0, 587,0,698,0,880,698,587,440];
-  const BASS_NORMAL   = [131,0,0,131, 165,0,0,165,  147,0,0,147, 196,0,0,196];
-  // スロットの無敵中に切り替わる、テンションの高いパターン
-  const MELODY_INVINCIBLE = [784,880,988,1046, 880,988,1046,1174, 784,880,988,1046, 880,988,1046,1318];
-  const BASS_INVINCIBLE   = [196,196,220,220, 196,196,247,247, 220,220,247,247, 196,196,220,220];
-  let bgmTimer = null;
-  let bgmStep = 0;
+  // ---- BGM（アップロードされた音声ファイルをループ再生） ----
+  const bgmAudio = new Audio('bgm.mp3');
+  bgmAudio.loop = true;
+  bgmAudio.volume = 0.28;
 
-  function playNote(freq, type, duration, volume) {
-    const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(volume, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    osc.connect(gain).connect(masterGain);
-    osc.start(now);
-    osc.stop(now + duration);
-  }
+  const bossBgmAudio = new Audio('bossBattle.mp3');
+  bossBgmAudio.loop = true;
+  bossBgmAudio.volume = 0.28;
 
-  function bgmStepTick() {
-    if (!audioCtx) return;
-    // スロットの無敵タイマーが動いている間は専用パターンに切り替える
-    const invincible = slotInvincibleTimer > 0;
-    const melody = invincible ? MELODY_INVINCIBLE : MELODY_NORMAL;
-    const bass = invincible ? BASS_INVINCIBLE : BASS_NORMAL;
-    const m = melody[bgmStep % melody.length];
-    const b = bass[bgmStep % bass.length];
-    if (m) playNote(m, 'triangle', 0.16, invincible ? 0.07 : 0.05);
-    if (b) playNote(b, invincible ? 'sawtooth' : 'square', 0.2, 0.05);
-    bgmStep++;
-  }
+  let currentBgm = bgmAudio;
 
   function startBGM() {
     try {
-      ensureAudio();
-      if (bgmTimer) return;
-      bgmStep = 0;
-      const stepMs = (60 / BGM_BPM / 2) * 1000;
-      bgmTimer = setInterval(bgmStepTick, stepMs);
+      currentBgm = bgmAudio;
+      bossBgmAudio.pause();
+      bgmAudio.currentTime = 0; // 新しいゲーム開始時は曲の頭から
+      bgmAudio.muted = muted;
+      bgmAudio.play().catch(() => {});
     } catch (e) {
-      // 音声が使えない場合は何もせず失敗させる
+      // 再生できない場合は何もせず失敗させる
+    }
+  }
+
+  function startBossBGM() {
+    try {
+      currentBgm = bossBgmAudio;
+      bgmAudio.pause();
+      bossBgmAudio.currentTime = 0; // ボス戦開始時は曲の頭から
+      bossBgmAudio.muted = muted;
+      bossBgmAudio.play().catch(() => {});
+    } catch (e) {
+      // 再生できない場合は何もせず失敗させる
     }
   }
 
   function stopBGM() {
-    if (bgmTimer) {
-      clearInterval(bgmTimer);
-      bgmTimer = null;
-    }
+    bgmAudio.pause();
+    bossBgmAudio.pause();
   }
 
   function resumeBGM() {
     try {
-      if (bgmTimer || !audioCtx) return;
-      const stepMs = (60 / BGM_BPM / 2) * 1000;
-      bgmTimer = setInterval(bgmStepTick, stepMs);
+      currentBgm.muted = muted;
+      currentBgm.play().catch(() => {}); // 一時停止した位置から再開
     } catch (e) {
-      // 音声が使えない場合は何もせず失敗させる
+      // 再生できない場合は何もせず失敗させる
     }
   }
 
   function toggleMute() {
     muted = !muted;
     if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+    bgmAudio.muted = muted;
+    bossBgmAudio.muted = muted;
     muteBtn.textContent = muted ? '🔇' : '🔊';
   }
 
@@ -1776,10 +2441,85 @@
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
+  // ---- 会話シーン（仮実装） ----
+  const INTRO_SCRIPT = [
+    {name:'？？？', text:'……気づいたか。ここは、夜がずっと明けない不思議な場所だ。'},
+    {name:'？？？', text:'お前には、朝が来るまでこの夜を走り抜けてもらう。'},
+    {name:'主人公', text:'……わかった。やってみるよ。'},
+    {name:'？？？', text:'コインを集めれば、時々ラッキースロットが回る。うまくいけば力を貸してくれるはずだ。'},
+    {name:'？？？', text:'満月の夜には、特別な力に目覚めることもあるらしい。'},
+    {name:'？？？', text:'さあ、行け。夜を走り抜けろ——「RUN THE NIGHT」。'},
+  ];
+  // 仮のシナリオです。ボスの正体や結末など、内容が決まれば差し替えてください。
+  const BOSS_INTRO_SCRIPT = [
+    {name:'主人公', text:'……ここが夜の最後の果て？　何か、大きな気配がする。'},
+    {name:'？？？', text:'よくぞ辿り着いた。だが、この夜を明けさせるわけにはいかない。'},
+    {name:'？？？', text:'私を捕まえられるかな……？'},
+    {name:'主人公', text:'待てよ！　朝を取り戻してみせる！'},
+  ];
+  const BOSS_DEFEAT_SCRIPT = [
+    {name:'？？？', text:'……捕まえた、な。まいった。'},
+    {name:'？？？', text:'長い夜も、これでおしまいだ。ありがとう。'},
+    {name:'主人公', text:'やっと、朝が来るんだね。'},
+  ];
+
+  let dialogueIndex = 0;
+  let currentDialogueScript = INTRO_SCRIPT;
+  let currentDialogueOnComplete = null;
+
+  function startDialogue(script, onComplete) {
+    currentDialogueScript = script;
+    currentDialogueOnComplete = onComplete;
+    dialogueIndex = 0;
+    showDialogueLine();
+    dialogueOverlay.classList.remove('hide');
+  }
+
+  function showDialogueLine() {
+    const line = currentDialogueScript[dialogueIndex];
+    dialogueName.textContent = line.name;
+    dialogueText.textContent = line.text;
+    playDialogueVoiceSound();
+  }
+
+  function advanceDialogue() {
+    playDialogueTapSound();
+    dialogueIndex++;
+    if (dialogueIndex >= currentDialogueScript.length) {
+      dialogueOverlay.classList.add('hide');
+      const onComplete = currentDialogueOnComplete;
+      currentDialogueOnComplete = null;
+      if (onComplete) onComplete();
+    } else {
+      showDialogueLine();
+    }
+  }
+
+  dialogueBox.addEventListener('click', advanceDialogue);
+
   startBtn.addEventListener('click', () => {
     startOverlay.classList.add('hide');
+    startDialogue(INTRO_SCRIPT, () => {
+      resetGame();
+      startBGM();
+    });
+  });
+  testBossBtn.addEventListener('click', () => {
+    // 調整用：会話や通常コースを飛ばして、直接ボス戦から始める
+    startOverlay.classList.add('hide');
     resetGame();
-    startBGM();
+    ownedPowerups = {shoes:true, barrier:true, turban:true};
+    barrierChargeAvailable = true;
+    course = FINAL_BOSS_COURSE;
+    courseCountEl.textContent = course;
+    isBossStage = true;
+    level = buildBossLevel();
+    player.x = 40;
+    player.y = GROUND_Y - player.h;
+    camX = 0;
+    spawnBoss();
+    gameState = 'playing';
+    startBossBGM();
   });
   retryBtn.addEventListener('click', () => {
     resetGame();
